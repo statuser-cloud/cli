@@ -21,7 +21,7 @@ export function detectLang(env: NodeJS.ProcessEnv = process.env): Lang {
 const ru = {
   // Program
   programDescription:
-    'Командная строка Statuser: сценарии как код, плановые работы в CI, heartbeat для крон-задач',
+    'CLI Statuser: сценарии как код, плановые работы в CI, heartbeat для крон-задач',
   optJson: 'вывести ответ в JSON',
   optApiUrl: 'адрес API (по умолчанию https://api.statuser.cloud)',
   optDebug: 'печатать запросы в stderr (секреты скрыты)',
