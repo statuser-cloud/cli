@@ -159,12 +159,16 @@ const ru = {
   optEnv: 'переменная окружения сценария KEY=VALUE (можно несколько)',
   scenarioRunning: 'Прогоняю сценарий…',
   scenarioPassed: (seconds: string) => `Сценарий прошёл за ${seconds} с.`,
-  scenarioFailed: (state: string) => `Сценарий не прошёл: ${state}.`,
+  scenarioFailed: (state: string): string =>
+    state === 'timed_out'
+      ? 'Сценарий не уложился в таймаут.'
+      : 'Сценарий не прошёл.',
   scenarioRunnerError:
     'Песочница не смогла выполнить прогон — это сбой на стороне Statuser, а не сайта.',
   scenarioFailedTest: (title: string) => `Тест: ${title}`,
   scenarioError: (message: string) => `Ошибка: ${message}`,
-  scenarioArtifact: (kind: string, url: string) => `${kind}: ${url}`,
+  scenarioArtifact: (kind: string, url: string) =>
+    `${{ screenshot: 'Скриншот', video: 'Видео', trace: 'Трейс' }[kind] ?? kind}: ${url}`,
   configNotFound: (path: string) => `Не найден конфиг ${path}`,
   configInvalid: (path: string, problem: string) => `${path}: ${problem}`,
   envMissing: (name: string, scenario: string) =>
@@ -329,12 +333,16 @@ const en: Messages = {
   optEnv: 'scenario environment variable KEY=VALUE (repeatable)',
   scenarioRunning: 'Running the scenario…',
   scenarioPassed: (seconds) => `Scenario passed in ${seconds} s.`,
-  scenarioFailed: (state) => `Scenario did not pass: ${state}.`,
+  scenarioFailed: (state) =>
+    state === 'timed_out'
+      ? 'The scenario ran out of time.'
+      : 'The scenario did not pass.',
   scenarioRunnerError:
     'The sandbox could not run the scenario — a Statuser-side failure, not a site one.',
   scenarioFailedTest: (title) => `Test: ${title}`,
   scenarioError: (message) => `Error: ${message}`,
-  scenarioArtifact: (kind, url) => `${kind}: ${url}`,
+  scenarioArtifact: (kind, url) =>
+    `${{ screenshot: 'Screenshot', video: 'Video', trace: 'Trace' }[kind] ?? kind}: ${url}`,
   configNotFound: (path) => `Config not found: ${path}`,
   configInvalid: (path, problem) => `${path}: ${problem}`,
   envMissing: (name, scenario) =>
