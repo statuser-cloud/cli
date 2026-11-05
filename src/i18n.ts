@@ -31,7 +31,7 @@ const ru = {
   cmdLogout: 'удалить сохранённый API-ключ',
   cmdWhoami: 'показать аккаунт, к которому относится ключ',
   optWithToken: 'прочитать ключ из stdin, а не спрашивать',
-  promptApiKey: 'API-ключ (Настройки → API в панели Statuser): ',
+  promptApiKey: 'API-ключ (панель Statuser → Настройки аккаунта → API и MCP): ',
   loginEmptyKey: 'Ключ пустой.',
   loginNoTty:
     'Нет терминала для ввода. Передайте ключ через stdin: statuser login --with-token < key.txt',
@@ -117,7 +117,7 @@ const ru = {
   heartbeatSendFailed: (message: string) =>
     `Не удалось отправить heartbeat: ${message}`,
   heartbeatTokenRejected:
-    'Токен heartbeat не найден (404). Проверьте его в карточке сервера.',
+    'Токен heartbeat не найден (404). Сверьте его с «URL запроса» на карточке сервера.',
   runNoCommand:
     'Укажите команду после --: statuser run --heartbeat <токен> -- ./backup.sh',
   runSpawnFailed: (cmd: string, message: string) =>
@@ -213,7 +213,7 @@ const en: Messages = {
   cmdLogout: 'remove the saved API key',
   cmdWhoami: 'show the account the key belongs to',
   optWithToken: 'read the key from stdin instead of prompting',
-  promptApiKey: 'API key (Settings → API in the Statuser panel): ',
+  promptApiKey: 'API key (Statuser panel → Account settings → API and MCP): ',
   loginEmptyKey: 'The key is empty.',
   loginNoTty:
     'No terminal to prompt on. Pass the key via stdin: statuser login --with-token < key.txt',
@@ -293,7 +293,7 @@ const en: Messages = {
   heartbeatFailSent: 'Failure recorded.',
   heartbeatSendFailed: (message) => `Could not send the heartbeat: ${message}`,
   heartbeatTokenRejected:
-    'Heartbeat token not found (404). Check it on the server card.',
+    'Heartbeat token not found (404). Compare it with the request URL on the server card.',
   runNoCommand:
     'Pass a command after --: statuser run --heartbeat <token> -- ./backup.sh',
   runSpawnFailed: (cmd, message) => `Could not start ${cmd}: ${message}`,
