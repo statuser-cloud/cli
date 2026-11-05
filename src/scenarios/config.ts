@@ -91,6 +91,9 @@ export interface DesiredConfig {
 export async function loadScenarioConfig(
   path: string,
   env: NodeJS.ProcessEnv = process.env,
+  // `scenarios deploy` needs the section; `apply` leaves scenarios alone
+  // when the file has none.
+  options: { required: boolean } = { required: true },
 ): Promise<DesiredConfig> {
   let text: string;
   try {
@@ -111,6 +114,9 @@ export async function loadScenarioConfig(
   if (!isObject(raw)) return fail('expected an object');
   if (!isPositiveInt(raw.project_id)) {
     return fail('project_id: positive integer required');
+  }
+  if (raw.scenarios === undefined && !options.required) {
+    return { projectId: raw.project_id as number, scenarios: [] };
   }
   if (!Array.isArray(raw.scenarios) || !raw.scenarios.length) {
     return fail('scenarios: non-empty array required');
@@ -222,7 +228,8 @@ export function scenarioEnvProblem(env: Record<string, string>): string | null {
 }
 
 /**
- * `"$NAME"` / `"${NAME}"` reads the CI environment; anything else is a
+ * `"$NAME"` / `"${NAME}"` reads the CI environment; `"$$…"` is a literal
+ * value starting with `$`; anything else is a
  * literal. Secrets belong in CI variables, not in the committed config.
  */
 export function resolveEnvValue(
@@ -230,6 +237,7 @@ export function resolveEnvValue(
   scenario: string,
   env: NodeJS.ProcessEnv,
 ): string {
+  if (value.startsWith('$$')) return value.slice(1);
   const match = ENV_REFERENCE.exec(value);
   if (!match) return value;
   const name = (match[1] ?? match[2]) as string;

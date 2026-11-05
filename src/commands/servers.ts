@@ -6,6 +6,8 @@ import { CliError, ExitCode, StatuserApiError } from '../errors.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
 import { printErr, printJson, printLine, printTable } from '../output.js';
+import { SCENARIO_LOCATIONS } from '../scenarios/config.js';
+import { planServerPatch, type BulkChange } from '../servers-update.js';
 
 export type Server = components['schemas']['ServerResponseDto'];
 
@@ -33,6 +35,8 @@ interface BulkResult {
   done: number[];
   skipped: number[];
   failed: Array<{ id: number; message: string }>;
+  /** Set when the key stopped working mid-way; the rest was not attempted. */
+  aborted?: 'unauthorized';
 }
 
 export function registerServersCommands(program: Command): void {
@@ -143,9 +147,145 @@ export function registerServersCommands(program: Command): void {
         report(command, result, t.resumedOne);
       },
     );
+
+  servers
+    .command('update')
+    .description(t.cmdServersUpdate)
+    .argument('[ids...]', 'id')
+    .option('--project <id>', t.optProject, parseId)
+    .option('--protocol <protocol>', t.optProtocol)
+    .option('--interval <seconds>', t.optInterval, parseNonNegative)
+    .option('--timeout <seconds>', t.optRequestTimeout, parseNonNegative)
+    .option('--regions <codes>', t.optRegions)
+    .option('--confirm-delay <seconds>', t.optConfirmDelay, parseNonNegative)
+    .option('--ssl', t.optSsl)
+    .option('--no-ssl', t.optNoSsl)
+    .option('--domain', t.optDomain)
+    .option('--no-domain', t.optNoDomain)
+    .option('--blocklist', t.optBlocklist)
+    .option('--no-blocklist', t.optNoBlocklist)
+    .option('--latency-alert <ms>', t.optLatencyAlert, parseNonNegative)
+    .option('--no-latency-alert', t.optNoLatencyAlert)
+    .option('--dry-run', t.optDryRun)
+    .action(async (ids: string[], opts: UpdateOptions, command: Command) => {
+      const change = toBulkChange(opts);
+      const { client } = await authedClient(command);
+      let all = await listServers(client, opts.project);
+      if (opts.protocol) {
+        all = all.filter((server) => server.protocol === opts.protocol);
+      }
+      const targets = pickTargets(all, ids, opts.project);
+      const plans = new Map(
+        targets.map((server) => [server.id, planServerPatch(server, change)]),
+      );
+      const json = globalOptions(command).json;
+      if (opts.dryRun) {
+        const planned = targets.map((server) => {
+          const plan = plans.get(server.id)!;
+          return {
+            id: server.id,
+            fields: plan.fields,
+            not_applicable: plan.notApplicable,
+          };
+        });
+        if (json) printJson({ dry_run: true, planned });
+        else {
+          for (const item of planned) {
+            printLine(
+              describeUpdate(item.id, item.fields, item.not_applicable),
+            );
+          }
+          printLine(t.deployDryRunDone);
+        }
+        return;
+      }
+      const result = await bulkApply(
+        targets,
+        (server) => {
+          const plan = plans.get(server.id)!;
+          if (plan.fields.length) return null;
+          return plan.notApplicable.length
+            ? t.updateNotApplicable(server.id, plan.notApplicable.join(', '))
+            : t.updateUnchanged(server.id);
+        },
+        (server) =>
+          client.call({
+            method: 'PATCH',
+            path: `/v1/servers/${server.id}`,
+            body: plans.get(server.id)!.body,
+          }),
+      );
+      report(command, result, (id) => {
+        const plan = plans.get(id)!;
+        return describeUpdate(id, plan.fields, plan.notApplicable);
+      });
+    });
 }
 
-function pickTargets(
+interface UpdateOptions {
+  project?: number;
+  protocol?: string;
+  interval?: number;
+  timeout?: number;
+  regions?: string;
+  confirmDelay?: number;
+  ssl?: boolean;
+  domain?: boolean;
+  blocklist?: boolean;
+  latencyAlert?: number | false;
+  dryRun?: boolean;
+}
+
+function toBulkChange(opts: UpdateOptions): BulkChange {
+  const regions = opts.regions
+    ?.split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+  if (regions) {
+    if (!regions.length) throw new CliError(t.regionsEmpty, ExitCode.Usage);
+    for (const region of regions) {
+      if (!SCENARIO_LOCATIONS.includes(region as never)) {
+        throw new CliError(t.regionInvalid(region), ExitCode.Usage);
+      }
+    }
+  }
+  const change: BulkChange = {
+    interval: opts.interval,
+    timeout: opts.timeout,
+    regions,
+    confirmDelay: opts.confirmDelay,
+    ssl: opts.ssl,
+    domain: opts.domain,
+    blocklist: opts.blocklist,
+    latency: opts.latencyAlert,
+  };
+  if (Object.values(change).every((value) => value === undefined)) {
+    throw new CliError(t.updateNothing, ExitCode.Usage);
+  }
+  return change;
+}
+
+function describeUpdate(
+  id: number,
+  fields: string[],
+  notApplicable: string[],
+): string {
+  const parts = [fields.length ? fields.join(', ') : t.noChanges];
+  if (notApplicable.length) {
+    parts.push(t.notApplicableNote(notApplicable.join(', ')));
+  }
+  return `#${id}: ${parts.join('; ')}`;
+}
+
+function parseNonNegative(raw: string): number {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new CliError(t.numberInvalid(raw), ExitCode.Usage);
+  }
+  return value;
+}
+
+export function pickTargets(
   all: Server[],
   rawIds: string[],
   projectId: number | undefined,
@@ -177,6 +317,19 @@ async function bulk(
   action: 'pause' | 'unpause',
   skipReason: (server: Server) => string | null,
 ): Promise<BulkResult> {
+  return bulkApply(targets, skipReason, (server) =>
+    client.call({
+      method: 'PATCH',
+      path: `/v1/servers/${server.id}/${action}`,
+    }),
+  );
+}
+
+export async function bulkApply(
+  targets: Server[],
+  skipReason: (server: Server) => string | null,
+  apply: (server: Server) => Promise<unknown>,
+): Promise<BulkResult> {
   const result: BulkResult = { done: [], skipped: [], failed: [] };
   for (const server of targets) {
     const reason = skipReason(server);
@@ -186,15 +339,14 @@ async function bulk(
       continue;
     }
     try {
-      await client.call({
-        method: 'PATCH',
-        path: `/v1/servers/${server.id}/${action}`,
-      });
+      await apply(server);
       result.done.push(server.id);
     } catch (error) {
       if (error instanceof StatuserApiError && error.status === 401) {
-        // The key stopped working: every next call fails the same way.
-        throw error;
+        // The key stopped working: every next call fails the same way. What
+        // was done so far is still reported, so `resume --from` can use it.
+        result.aborted = 'unauthorized';
+        break;
       }
       const message =
         error instanceof StatuserApiError ? error.format() : String(error);
@@ -205,7 +357,7 @@ async function bulk(
   return result;
 }
 
-function report(
+export function report(
   command: Command,
   result: BulkResult,
   doneLine: (id: number) => string,
@@ -217,7 +369,12 @@ function report(
     for (const id of result.done) printLine(doneLine(id));
     printLine(t.bulkSummary(result.done.length, result.failed.length));
   }
-  if (result.failed.length) process.exitCode = ExitCode.Failure;
+  if (result.aborted) {
+    printErr(t.unauthorized);
+    process.exitCode = ExitCode.Auth;
+  } else if (result.failed.length) {
+    process.exitCode = ExitCode.Failure;
+  }
 }
 
 async function readPausedIds(path: string): Promise<number[]> {

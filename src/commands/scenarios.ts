@@ -196,7 +196,7 @@ export function registerScenariosCommands(program: Command): void {
     );
 }
 
-function describeStep(step: PlanStep): string {
+export function describeStep(step: PlanStep): string {
   switch (step.kind) {
     case 'create':
       return t.deployCreate(step.scenario.name);

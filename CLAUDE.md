@@ -57,6 +57,20 @@ version.
 - Write commands must not leave half-applied state they could have prevented:
   everything the API would reject mid-way (limits, names, duplicates) is
   checked before the first write — see `scenarios/plan.ts`.
+- **The CLI never deletes.** `apply` and `deploy` only list what the file
+  does not mention; removal is an explicit `statuser api … -X DELETE`.
+- **`apply` never changes a server's protocol**: the backend wipes what
+  belonged to the old one (HTTP credentials, LLM key, heartbeat token).
+- **What a protocol uses lives in one place** — `servers-config/fields.ts`
+  (export allowlist, accepted file fields, `servers update` applicability).
+  It mirrors `servers.service.ts` in the backend; when the backend changes
+  which protocol uses a field, change it here too.
+- **Duplicates are replayed in execution order** (`checkDuplicates`): the
+  backend checks each request against the state at that moment, so a
+  final-state check alone would let an address swap fail on its first PATCH.
+- Export output is written 0600 (`files.ts`) and secret header values are
+  replaced with `$STATUSER_<id>_<n>_<HEADER>` references; host, body and
+  username are exported as is, and the docs say so.
 
 ## Secrets
 

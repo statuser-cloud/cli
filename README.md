@@ -4,7 +4,7 @@
 [![CI](https://github.com/statuser-cloud/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/statuser-cloud/cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Утилита командной строки для [Statuser](https://statuser.cloud): сценарные проверки как код, плановые работы и пауза проверок на время деплоя, heartbeat для крон-задач. Работает поверх [публичного API Statuser](https://statuser.cloud/api-reference) с авторизацией по API-ключу.
+Утилита командной строки для [Statuser](https://statuser.cloud): серверы и сценарные проверки как код, плановые работы и пауза проверок на время деплоя, инциденты и отчёты на странице статуса, heartbeat для крон-задач. Работает поверх [публичного API Statuser](https://statuser.cloud/api-reference) с авторизацией по API-ключу.
 
 ```console
 $ statuser scenarios test checks/checkout.spec.ts
@@ -25,6 +25,10 @@ Locator: getByRole('heading', { name: 'Мои заказы' })
 - [Сценарии как код](#сценарии-как-код)
 - [Плановые работы и пауза на время деплоя](#плановые-работы-и-пауза-на-время-деплоя)
 - [Heartbeat](#heartbeat)
+- [Серверы как код: export, diff, apply](#серверы-как-код-export-diff-apply)
+- [Массовые правки](#массовые-правки)
+- [Инциденты](#инциденты)
+- [Отчёты на странице статуса](#отчёты-на-странице-статуса)
 - [Готовые файлы CI](#готовые-файлы-ci)
 - [Остальные команды](#остальные-команды)
 - [Переменные окружения](#переменные-окружения)
@@ -190,6 +194,81 @@ STATUSER_HEARTBEAT_TOKEN=… statuser run -- ./backup.sh
 - Пока не пришёл первый сигнал, Statuser не знает, что задача запущена, и пропуски не считает. Интервал и допустимую задержку heartbeat-сервера задайте с запасом на самую долгую задачу.
 - Разовый сигнал без команды: `statuser heartbeat ping "$TOKEN"`, сигнал ошибки — с `--fail`.
 
+## Серверы как код: export, diff, apply
+
+Серверы проекта — HTTP, keyword, ping, TCP, DNS, heartbeat и LLM — описываются в той же `statuser.json`, что и сценарии, в секции `servers`.
+
+```bash
+statuser export --project 100000 -o statuser.json   # выгрузить, что есть сейчас
+statuser diff                                       # что изменит apply
+statuser apply                                      # привести проект к файлу
+```
+
+```json
+{
+  "project_id": 100000,
+  "servers": [
+    {
+      "id": 1874,
+      "name": "Сайт магазина",
+      "protocol": "http",
+      "host": "https://shop.example.com",
+      "check_interval": 60,
+      "locations": ["msk-1", "spb-1"],
+      "is_ssl_check": true,
+      "headers": [{ "key": "Authorization", "value": "$SHOP_API_TOKEN" }]
+    },
+    { "name": "Бэкап базы", "protocol": "heartbeat", "check_interval": 86400 }
+  ],
+  "scenarios": []
+}
+```
+
+- Поля называются так же, как в [API](https://statuser.cloud/api-reference). В файле допустимы только поля, которые использует протокол сервера: лишнее поле — ошибка до записи, а не тихий сброс на стороне API.
+- Сервер узнаётся по `id`, а без него — по имени внутри проекта. `export` пишет `id` у каждого сервера.
+- Пароли, токены и ключи API не возвращает, поэтому `export` их не пишет. В файле их задают ссылкой на переменную окружения: `"http_auth_password": "$SHOP_PASSWORD"`. Заданный секрет отправляется при каждом `apply`. Значения заголовков с секретными именами (`Authorization`, `Cookie`, `*-Token` и т. п.) `export` заменяет на `$STATUSER_<id>_…` и называет переменные. Строка, которая сама начинается с `$`, пишется как `$$…`.
+- Адрес, тело запроса и логин `export` выгружает как есть — в них тоже бывают секреты. Файл создаётся с доступом только для владельца; проверьте его перед коммитом.
+- `apply` ничего не удаляет. Серверы проекта, которых нет в файле, только показываются в плане. Пауза в файл не попадает, и `apply` её не трогает.
+- Протокол существующего сервера `apply` не меняет: смена стирает его настройки (авторизацию, ключ LLM, токен heartbeat). Это делается в панели.
+- До первой записи проверяется всё, что можно проверить: поля и их диапазоны, дубли серверов во всём аккаунте (в том числе по пути — обмен адресами между двумя серверами не пройдёт), лимиты и функции тарифа. Ошибка записи всё же возможна — тогда применённое до неё остаётся, а повторный `apply` продолжит с этого места.
+- Секции `servers` и `scenarios` независимы: нет секции — `apply` эту часть проекта не трогает. `scenarios deploy` по-прежнему работает только со сценариями.
+
+## Массовые правки
+
+```bash
+statuser servers update --project 100000 --interval 60 --regions msk-1,spb-1 --dry-run
+statuser servers update --project 100000 --protocol http --ssl --domain
+statuser servers update 101 102 --latency-alert 800
+```
+
+Флаги: `--interval`, `--timeout`, `--regions`, `--confirm-delay`, `--ssl` / `--no-ssl`, `--domain` / `--no-domain`, `--blocklist` / `--no-blocklist`, `--latency-alert <мс>` / `--no-latency-alert`. Отправляются только реально меняющиеся поля. Сервер, к протоколу которого флаг не относится (например, `--ssl` у ping), пропускается с объяснением, а не получает правку, которую API молча сбросил бы. Ошибка на одном сервере не останавливает остальные; `--json` возвращает `done`, `skipped` и `failed`.
+
+## Инциденты
+
+```bash
+statuser incidents list --open
+statuser incidents list --since 7d --project 100000
+statuser incidents get 5021
+statuser incidents ai 5021                      # разбор Statuser AI
+statuser incidents pdf 5021 -o incident-5021.pdf
+```
+
+`--since` и `--until` фильтруют по времени начала инцидента: `24h`, `7d` или дата. Диагностика и разбор Statuser AI есть на платных тарифах; если данных нет, разбор так и скажет. PDF сохраняется с доступом только для владельца, существующий файл перезаписывается только с `--force`.
+
+## Отчёты на странице статуса
+
+Публичные отчёты об инцидентах — то, что видят посетители страницы статуса и получают её подписчики.
+
+```bash
+statuser reports create --page 12 --all-servers --status degraded \
+  --title "Медленная оплата" --message "Разбираемся с задержками платежей"
+statuser reports update 88 --page 12 --message "Нашли причину, выкатываем исправление"
+statuser reports resolve 88 --page 12 --message "Платежи проходят штатно"
+statuser reports list --page 12
+```
+
+Сообщение обязательно в каждой команде: оно уходит подписчикам на языке страницы, поэтому CLI своих текстов не подставляет. `resolve` уже закрытого отчёта ничего не отправляет — шаг CI можно безопасно перезапустить.
+
 ## Готовые файлы CI
 
 ### GitHub Actions
@@ -254,7 +333,7 @@ deploy:
 ```bash
 statuser servers list --project 100000 --protocol http
 statuser servers get 101
-statuser api /v1/incidents -F limit=5
+statuser api /v1/status-pages
 statuser api /v1/servers/101 -X PATCH -F check_interval=120
 statuser whoami
 statuser logout

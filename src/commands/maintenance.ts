@@ -5,12 +5,11 @@ import { CliError, ExitCode, StatuserApiError } from '../errors.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
 import { printJson, printLine } from '../output.js';
+import { pageServerIds } from '../status-page.js';
 import { parseId } from './servers.js';
 
 type Maintenance =
   components['schemas']['StatusPagePlannedMaintenanceResponseDto'];
-
-type StatusPage = components['schemas']['StatusPageResponseDto'];
 
 const DEFAULT_WINDOW = '30m';
 
@@ -61,16 +60,7 @@ export function registerMaintenanceCommands(program: Command): void {
         throw new CliError(t.maintenanceNoServers, ExitCode.Usage);
       }
       const { client } = await authedClient(command);
-      if (opts.allServers) {
-        const page = await client.call<StatusPage>({
-          method: 'GET',
-          path: `/v1/status-pages/${opts.page}`,
-        });
-        serverIds = page.servers.map((server) => server.server_id);
-        if (!serverIds.length) {
-          throw new CliError(t.maintenancePageEmpty(opts.page), ExitCode.Usage);
-        }
-      }
+      if (opts.allServers) serverIds = await pageServerIds(client, opts.page);
       const now = new Date();
       const created = await client.call<Maintenance>({
         method: 'POST',

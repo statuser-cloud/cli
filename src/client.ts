@@ -27,6 +27,11 @@ export interface RequestOptions {
   timeoutMs?: number;
 }
 
+export interface BinaryResponse {
+  contentType: string;
+  bytes: Buffer;
+}
+
 export interface ClientOptions {
   apiUrl: string;
   apiKey?: string;
@@ -37,14 +42,22 @@ export class StatuserClient {
   constructor(private readonly options: ClientOptions) {}
 
   async call<T>(opts: RequestOptions): Promise<T> {
-    return (await this.execute(opts)) as T;
+    return (await this.execute(opts, false)) as T;
   }
 
-  private async execute(opts: RequestOptions): Promise<unknown> {
+  /** For files (PDF reports): the body is returned as bytes, never parsed. */
+  async callBinary(opts: RequestOptions): Promise<BinaryResponse> {
+    return (await this.execute(opts, true)) as BinaryResponse;
+  }
+
+  private async execute(
+    opts: RequestOptions,
+    binary: boolean,
+  ): Promise<unknown> {
     const url = this.buildUrl(opts.path, opts.query);
     const headers: Record<string, string> = {
       'user-agent': USER_AGENT,
-      accept: 'application/json',
+      accept: binary ? '*/*' : 'application/json',
     };
     if (!opts.anonymous) {
       if (!this.options.apiKey) throw new CliError(t.noApiKey, ExitCode.Auth);
@@ -87,6 +100,12 @@ export class StatuserClient {
         }
       }
 
+      if (binary && res.status >= 200 && res.status < 300) {
+        return {
+          contentType: res.headers.get('content-type') ?? '',
+          bytes: Buffer.from(await res.arrayBuffer()),
+        } satisfies BinaryResponse;
+      }
       const text = await res.text();
       if (res.status >= 200 && res.status < 300) {
         if (!text) return null;

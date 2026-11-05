@@ -198,6 +198,169 @@ const ru = {
     `Сценарий «${name}»: сервер #${id} в другом проекте (#${project}).`,
   deployEnvAlwaysSent:
     'Значения переменных окружения API не возвращает, поэтому они отправляются при каждом deploy.',
+
+  // incidents
+  cmdIncidents: 'инциденты',
+  cmdIncidentsList: 'список инцидентов',
+  cmdIncidentsGet: 'инцидент по id',
+  cmdIncidentsAi: 'разбор инцидента Statuser AI',
+  cmdIncidentsPdf: 'скачать PDF-отчёт по инциденту',
+  optOpen: 'только идущие',
+  optIncidentStatus:
+    'статусы через запятую: ongoing, resolved, dismissed, auto_closed_changed, auto_closed_timeout',
+  optServerIds: 'id серверов через запятую',
+  optSince: 'начавшиеся не раньше: 24h, 7d или дата ISO',
+  optUntil: 'начавшиеся не позже: дата ISO',
+  optOutput: 'куда сохранить файл',
+  optForce: 'перезаписать существующий файл',
+  incidentsOpenWithStatus: 'Укажите что-то одно: --open или --status.',
+  incidentStatusInvalid: (status: string) => `Неизвестный статус: ${status}`,
+  whenInvalid: (raw: string) =>
+    `Неверная дата: ${raw}. Примеры: 24h, 7d, 2026-11-01`,
+  incidentsEmpty: 'Инцидентов нет.',
+  colServer: 'Сервер',
+  colStarted: 'Начало',
+  colDuration: 'Длительность',
+  colError: 'Ошибка',
+  incidentStatus: (status: string): string =>
+    ({
+      ongoing: 'идёт',
+      resolved: 'завершён',
+      dismissed: 'отклонён',
+      auto_closed_changed: 'закрыт после правки сервера',
+      auto_closed_timeout: 'закрыт по сроку',
+    })[status] ?? status,
+  aiNoData:
+    'Для разбора нет данных: у инцидента нет диагностики (она есть на платных тарифах).',
+  incidentTitle: (id: number) => `Инцидент #${id}`,
+  incidentServer: (name: string) => `Сервер: ${name}`,
+  incidentStatusLine: (status: string) => `Статус: ${status}`,
+  incidentStarted: (time: string) => `Начало: ${time}`,
+  incidentEnded: (time: string) => `Конец: ${time}`,
+  incidentDurationLine: (duration: string) => `Длительность: ${duration}`,
+  incidentError: (error: string) => `Ошибка: ${error}`,
+  incidentDiagnostics: (locations: string) =>
+    `Диагностика: ${locations} (подробно — с --json)`,
+  duration: (days: number, hours: number, minutes: number): string =>
+    days
+      ? `${days} д ${hours} ч`
+      : hours
+        ? `${hours} ч ${minutes} мин`
+        : `${minutes} мин`,
+  unexpectedContentType: (type: string) =>
+    `API вернул не PDF, а ${type || 'неизвестный тип'}.`,
+  fileSaved: (path: string) => `Сохранено: ${path}`,
+  fileExists: (path: string) =>
+    `Файл ${path} уже есть. Чтобы перезаписать, добавьте --force.`,
+
+  // reports
+  cmdReports: 'отчёты об инцидентах на странице статуса',
+  cmdReportsList: 'отчёты страницы',
+  cmdReportsCreate: 'опубликовать отчёт об инциденте',
+  cmdReportsUpdate: 'добавить сообщение в отчёт',
+  cmdReportsResolve: 'закрыть отчёт: все серверы — resolved',
+  optReportMessage:
+    'сообщение для посетителей и подписчиков страницы (на языке страницы)',
+  optImpact: 'как затронуты серверы: downtime или degraded',
+  optUpdateStatus:
+    'новый статус всех серверов отчёта: downtime, degraded или resolved',
+  optLinkedIncidents: 'id инцидентов Statuser через запятую',
+  reportsEmpty: 'Отчётов нет.',
+  colTitle: 'Заголовок',
+  serverImpact: (status: string): string =>
+    ({
+      not_affected: 'не затронут',
+      downtime: 'недоступен',
+      degraded: 'работает с ошибками',
+      resolved: 'решено',
+    })[status] ?? status,
+  statusChoice: (allowed: string) => `Статус — один из: ${allowed}`,
+  reportCreated: (id: number) => `Отчёт #${id} опубликован.`,
+  reportUpdated: (id: number) => `Сообщение добавлено в отчёт #${id}.`,
+  reportResolved: (id: number) => `Отчёт #${id} закрыт.`,
+  reportAlreadyResolved: (id: number) =>
+    `Отчёт #${id} уже закрыт, сообщение не отправлено.`,
+  reportNoServers: (id: number) =>
+    `В отчёте #${id} нет затронутых серверов — обновлять нечего.`,
+
+  // servers update
+  cmdServersUpdate: 'изменить настройки серверов разом',
+  optInterval: 'интервал проверки, секунд',
+  optRequestTimeout: 'таймаут проверки, секунд',
+  optRegions: 'локации через запятую: msk-1, spb-1, ala-1, nyc-1, ams-1',
+  optConfirmDelay: 'задержка подтверждения сбоя, секунд (0 — сразу)',
+  optSsl: 'включить проверку SSL-сертификата',
+  optNoSsl: 'выключить проверку SSL-сертификата',
+  optDomain: 'включить проверку срока домена',
+  optNoDomain: 'выключить проверку срока домена',
+  optBlocklist: 'включить проверку реестра блокировок',
+  optNoBlocklist: 'выключить проверку реестра блокировок',
+  optLatencyAlert: 'уведомлять о медленном ответе дольше N мс',
+  optNoLatencyAlert: 'не уведомлять о медленном ответе',
+  regionsEmpty: 'Список локаций пустой.',
+  regionInvalid: (region: string) => `Неизвестная локация: ${region}`,
+  numberInvalid: (raw: string) => `Ожидается целое число: ${raw}`,
+  updateNothing: 'Укажите, что изменить: --interval, --regions, --ssl и т. д.',
+  updateUnchanged: (id: number) => `#${id}: уже так, пропущен`,
+  updateNotApplicable: (id: number, fields: string) =>
+    `#${id}: к протоколу сервера не относится (${fields}), пропущен`,
+  noChanges: 'без изменений',
+  notApplicableNote: (fields: string) => `не относится к протоколу: ${fields}`,
+
+  // export / diff / apply
+  cmdExport: 'выгрузить серверы проекта в statuser.json',
+  cmdDiff: 'показать, что изменит apply',
+  cmdApply: 'привести проект к statuser.json',
+  optExportOutput: 'записать в файл, а не в stdout',
+  exportHeaderVariables: (names: string) =>
+    `Значения секретных заголовков заменены ссылками на переменные окружения: ${names}. Задайте их перед apply.`,
+  exportSecretsOmitted: (names: string) =>
+    `Пароли, токены и ключи API не отдаёт, в файле их нет: ${names}. Для создания такого сервера заново добавьте их в файл как "$ПЕРЕМЕННАЯ".`,
+  exportPaused: (count: number) =>
+    `На паузе серверов: ${count}. Пауза в файл не попадает, apply её не меняет.`,
+  exportScenarios: (count: number) =>
+    `Сценариев в проекте: ${count}. Их скрипты не выгружаются — ведите их в секции scenarios.`,
+  exportReview:
+    'Проверьте файл перед коммитом: адрес, тело запроса и логин могут содержать секреты. Файл доступен только владельцу.',
+  applyNothingToManage: 'нет ни секции servers, ни секции scenarios',
+  applyClaimedTwice: (at: string, id: number) =>
+    `${at}: сервер #${id} уже указан в другой записи.`,
+  applyProtocolChange: (at: string, id: number, protocol: string) =>
+    `${at}: у сервера #${id} протокол ${protocol}. Смена протокола стирает его настройки (авторизацию, ключ, токен) — сделайте это в панели.`,
+  applyIdNotFound: (at: string, id: number) =>
+    `${at}: сервер #${id} не найден.`,
+  applyIdOtherProject: (at: string, id: number, project: number) =>
+    `${at}: сервер #${id} в другом проекте (#${project}).`,
+  applyAmbiguousName: (at: string, name: string) =>
+    `${at}: в проекте несколько серверов с именем «${name}» — укажите id.`,
+  applyFieldRequired: (at: string, field: string) =>
+    `${at}: для создания нужно поле ${field}.`,
+  applyLlmAvailability: (name: string) =>
+    `«${name}»: без llm_api_key проверяется только доступность эндпоинта, без запроса к модели.`,
+  applyDuplicate: (a: string, b: string) =>
+    `«${a}» совпадёт с «${b}» — Statuser не заводит одинаковые серверы.`,
+  applyServersLimit: (limit: number, existing: number, creating: number) =>
+    `Тариф разрешает серверов: ${limit}. Уже есть ${existing}, файл добавляет ${creating}.`,
+  applyIntervalTooLow: (at: string, min: number) =>
+    `${at}: интервал на этом тарифе — не меньше ${min} с.`,
+  applyLocationsUnavailable: (at: string, locations: string) =>
+    `${at}: на этом тарифе недоступны локации ${locations}.`,
+  applyDuplicateName: (at: string, other: string, name: string) =>
+    `${at}: имя «${name}» уже есть в ${other} — имена в файле должны быть разными.`,
+  applyNameTaken: (at: string, name: string, id: number) =>
+    `${at}: имя «${name}» уже у сервера #${id} этого проекта.`,
+  applyAuthHeaderConflict: (at: string) =>
+    `${at}: при http_auth_type заголовок Authorization задавать нельзя.`,
+  exportOtherProject: (path: string, project: number) =>
+    `${path} описывает проект #${project}, и его сценарии нельзя перенести в другой. Выгрузите в другой файл.`,
+  applyFeatureUnavailable: (at: string, feature: string) =>
+    `${at}: на этом тарифе нет функции ${feature}.`,
+  applyScenariosLimit: (limit: number, existing: number, creating: number) =>
+    `Тариф разрешает сценариев: ${limit}. Уже есть ${existing}, файл добавляет ${creating}.`,
+  applyScenarioTimeoutTooHigh: (name: string, max: number) =>
+    `«${name}»: таймаут сценария на этом тарифе — не больше ${max} с.`,
+  applyUnknownOutcome: (name: string, message: string) =>
+    `Нет ответа на запись «${name}» (${message}): неизвестно, применилась ли она. Запустите statuser diff и повторите apply.`,
 };
 
 export type Messages = typeof ru;
@@ -371,6 +534,162 @@ const en: Messages = {
     `Scenario “${name}”: server #${id} is in another project (#${project}).`,
   deployEnvAlwaysSent:
     'The API does not return environment values, so they are sent on every deploy.',
+
+  cmdIncidents: 'incidents',
+  cmdIncidentsList: 'list incidents',
+  cmdIncidentsGet: 'incident by id',
+  cmdIncidentsAi: 'Statuser AI summary of an incident',
+  cmdIncidentsPdf: 'download the PDF report of an incident',
+  optOpen: 'ongoing only',
+  optIncidentStatus:
+    'comma-separated statuses: ongoing, resolved, dismissed, auto_closed_changed, auto_closed_timeout',
+  optServerIds: 'comma-separated server ids',
+  optSince: 'started no earlier than: 24h, 7d or an ISO date',
+  optUntil: 'started no later than: an ISO date',
+  optOutput: 'where to save the file',
+  optForce: 'overwrite an existing file',
+  incidentsOpenWithStatus: 'Pass either --open or --status, not both.',
+  incidentStatusInvalid: (status) => `Unknown status: ${status}`,
+  whenInvalid: (raw) => `Invalid date: ${raw}. Examples: 24h, 7d, 2026-11-01`,
+  incidentsEmpty: 'No incidents.',
+  colServer: 'Server',
+  colStarted: 'Started',
+  colDuration: 'Duration',
+  colError: 'Error',
+  incidentStatus: (status) =>
+    ({
+      ongoing: 'ongoing',
+      resolved: 'resolved',
+      dismissed: 'dismissed',
+      auto_closed_changed: 'closed after a server edit',
+      auto_closed_timeout: 'closed by timeout',
+    })[status] ?? status,
+  aiNoData:
+    'Nothing to analyse: the incident has no diagnostics (available on paid plans).',
+  incidentTitle: (id) => `Incident #${id}`,
+  incidentServer: (name) => `Server: ${name}`,
+  incidentStatusLine: (status) => `Status: ${status}`,
+  incidentStarted: (time) => `Started: ${time}`,
+  incidentEnded: (time) => `Ended: ${time}`,
+  incidentDurationLine: (duration) => `Duration: ${duration}`,
+  incidentError: (error) => `Error: ${error}`,
+  incidentDiagnostics: (locations) =>
+    `Diagnostics: ${locations} (details with --json)`,
+  duration: (days, hours, minutes) =>
+    days
+      ? `${days}d ${hours}h`
+      : hours
+        ? `${hours}h ${minutes}m`
+        : `${minutes}m`,
+  unexpectedContentType: (type) =>
+    `The API returned ${type || 'an unknown type'} instead of a PDF.`,
+  fileSaved: (path) => `Saved: ${path}`,
+  fileExists: (path) => `${path} already exists. Add --force to overwrite it.`,
+
+  cmdReports: 'incident reports on a status page',
+  cmdReportsList: 'reports of a page',
+  cmdReportsCreate: 'publish an incident report',
+  cmdReportsUpdate: 'add a message to a report',
+  cmdReportsResolve: 'close a report: all servers resolved',
+  optReportMessage:
+    'message for page visitors and subscribers (in the page language)',
+  optImpact: 'how servers are affected: downtime or degraded',
+  optUpdateStatus:
+    'new status of all report servers: downtime, degraded or resolved',
+  optLinkedIncidents: 'comma-separated Statuser incident ids',
+  reportsEmpty: 'No reports.',
+  colTitle: 'Title',
+  serverImpact: (status) =>
+    ({
+      not_affected: 'not affected',
+      downtime: 'down',
+      degraded: 'degraded',
+      resolved: 'resolved',
+    })[status] ?? status,
+  statusChoice: (allowed) => `Status must be one of: ${allowed}`,
+  reportCreated: (id) => `Report #${id} published.`,
+  reportUpdated: (id) => `Message added to report #${id}.`,
+  reportResolved: (id) => `Report #${id} closed.`,
+  reportAlreadyResolved: (id) =>
+    `Report #${id} is already closed; no message sent.`,
+  reportNoServers: (id) =>
+    `Report #${id} has no affected servers — nothing to update.`,
+
+  cmdServersUpdate: 'change settings of many servers at once',
+  optInterval: 'check interval, seconds',
+  optRequestTimeout: 'check timeout, seconds',
+  optRegions: 'comma-separated locations: msk-1, spb-1, ala-1, nyc-1, ams-1',
+  optConfirmDelay: 'failure confirmation delay, seconds (0 — immediately)',
+  optSsl: 'turn the SSL certificate check on',
+  optNoSsl: 'turn the SSL certificate check off',
+  optDomain: 'turn the domain expiry check on',
+  optNoDomain: 'turn the domain expiry check off',
+  optBlocklist: 'turn the blocklist check on',
+  optNoBlocklist: 'turn the blocklist check off',
+  optLatencyAlert: 'alert on responses slower than N ms',
+  optNoLatencyAlert: 'do not alert on slow responses',
+  regionsEmpty: 'The location list is empty.',
+  regionInvalid: (region) => `Unknown location: ${region}`,
+  numberInvalid: (raw) => `Expected a whole number: ${raw}`,
+  updateNothing: 'Pass what to change: --interval, --regions, --ssl, etc.',
+  updateUnchanged: (id) => `#${id}: already set, skipped`,
+  updateNotApplicable: (id, fields) =>
+    `#${id}: not applicable to the server protocol (${fields}), skipped`,
+  noChanges: 'no changes',
+  notApplicableNote: (fields) => `not applicable to the protocol: ${fields}`,
+
+  cmdExport: "export the project's servers to statuser.json",
+  cmdDiff: 'show what apply would change',
+  cmdApply: 'bring the project in line with statuser.json',
+  optExportOutput: 'write to a file instead of stdout',
+  exportHeaderVariables: (names) =>
+    `Secret header values were replaced with environment variable references: ${names}. Set them before apply.`,
+  exportSecretsOmitted: (names) =>
+    `The API does not return passwords, tokens and keys, so the file has none: ${names}. To create such a server anew, add them to the file as "$VARIABLE".`,
+  exportPaused: (count) =>
+    `Paused servers: ${count}. Pausing is not in the file and apply does not change it.`,
+  exportScenarios: (count) =>
+    `Scenarios in the project: ${count}. Their scripts are not exported — keep them in the scenarios section.`,
+  exportReview:
+    'Review the file before committing: the address, request body and username may hold secrets. The file is readable by its owner only.',
+  applyNothingToManage: 'neither a servers nor a scenarios section',
+  applyClaimedTwice: (at, id) =>
+    `${at}: server #${id} is already used by another entry.`,
+  applyProtocolChange: (at, id, protocol) =>
+    `${at}: server #${id} uses ${protocol}. Changing the protocol wipes its settings (credentials, key, token) — do it in the panel.`,
+  applyIdNotFound: (at, id) => `${at}: server #${id} not found.`,
+  applyIdOtherProject: (at, id, project) =>
+    `${at}: server #${id} is in another project (#${project}).`,
+  applyAmbiguousName: (at, name) =>
+    `${at}: several servers in the project are named “${name}” — set an id.`,
+  applyFieldRequired: (at, field) =>
+    `${at}: ${field} is required to create it.`,
+  applyLlmAvailability: (name) =>
+    `“${name}”: without llm_api_key only the endpoint availability is checked, no model request.`,
+  applyDuplicate: (a, b) =>
+    `“${a}” would equal “${b}” — Statuser does not allow identical servers.`,
+  applyServersLimit: (limit, existing, creating) =>
+    `The plan allows ${limit} servers. There are ${existing}; the file adds ${creating}.`,
+  applyIntervalTooLow: (at, min) =>
+    `${at}: the interval on this plan is at least ${min} s.`,
+  applyLocationsUnavailable: (at, locations) =>
+    `${at}: locations ${locations} are not available on this plan.`,
+  applyDuplicateName: (at, other, name) =>
+    `${at}: the name “${name}” is already used by ${other} — names in the file must differ.`,
+  applyNameTaken: (at, name, id) =>
+    `${at}: the name “${name}” already belongs to server #${id} in this project.`,
+  applyAuthHeaderConflict: (at) =>
+    `${at}: an Authorization header cannot be set together with http_auth_type.`,
+  exportOtherProject: (path, project) =>
+    `${path} describes project #${project}; its scenarios cannot move to another one. Export to another file.`,
+  applyFeatureUnavailable: (at, feature) =>
+    `${at}: the plan has no ${feature}.`,
+  applyScenariosLimit: (limit, existing, creating) =>
+    `The plan allows ${limit} scenarios. There are ${existing}; the file adds ${creating}.`,
+  applyScenarioTimeoutTooHigh: (name, max) =>
+    `“${name}”: the scenario timeout on this plan is at most ${max} s.`,
+  applyUnknownOutcome: (name, message) =>
+    `No response to the write of “${name}” (${message}): whether it was applied is unknown. Run statuser diff and repeat apply.`,
 };
 
 const dictionaries: Record<Lang, Messages> = { ru, en };

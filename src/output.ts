@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 export function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -32,4 +34,31 @@ export function printTable(
 function cleanCell(cell: string | number | null | undefined): string {
   if (cell === null || cell === undefined) return '';
   return String(cell).replace(/\s+/g, ' ');
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** Local time without seconds: a table cell, not a log timestamp. */
+export function formatTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** From start to end, or to now while still going. */
+export function formatDuration(
+  startIso: string,
+  endIso: string | null,
+  now = Date.now(),
+): string {
+  const end = endIso ? Date.parse(endIso) : now;
+  const minutes = Math.max(
+    0,
+    Math.round((end - Date.parse(startIso)) / 60_000),
+  );
+  return t.duration(
+    Math.floor(minutes / 1440),
+    Math.floor((minutes % 1440) / 60),
+    minutes % 60,
+  );
 }

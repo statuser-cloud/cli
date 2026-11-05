@@ -15,6 +15,8 @@ export interface RecordedRequest {
 export interface FakeResponse {
   status?: number;
   body?: unknown;
+  /** Sent as is instead of JSON (files). */
+  raw?: Buffer;
   headers?: Record<string, string>;
 }
 
@@ -48,7 +50,8 @@ export async function startFakeApi(handler: Handler): Promise<FakeApi> {
       'content-type': 'application/json',
       ...reply.headers,
     });
-    res.end(reply.body === undefined ? '' : JSON.stringify(reply.body));
+    if (reply.raw) res.end(reply.raw);
+    else res.end(reply.body === undefined ? '' : JSON.stringify(reply.body));
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;

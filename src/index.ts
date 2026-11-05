@@ -3,7 +3,10 @@ import { Command, CommanderError } from 'commander';
 import { CLI_VERSION } from './client.js';
 import { registerApiCommand } from './commands/api.js';
 import { registerAuthCommands } from './commands/auth.js';
+import { registerConfigCommands } from './commands/config.js';
 import { registerHeartbeatCommands } from './commands/heartbeat.js';
+import { registerIncidentsCommands } from './commands/incidents.js';
+import { registerReportsCommands } from './commands/reports.js';
 import { registerMaintenanceCommands } from './commands/maintenance.js';
 import { registerScenariosCommands } from './commands/scenarios.js';
 import { registerServersCommands } from './commands/servers.js';
@@ -26,6 +29,9 @@ registerApiCommand(program);
 registerServersCommands(program);
 registerMaintenanceCommands(program);
 registerScenariosCommands(program);
+registerConfigCommands(program);
+registerIncidentsCommands(program);
+registerReportsCommands(program);
 registerHeartbeatCommands(program);
 
 try {
