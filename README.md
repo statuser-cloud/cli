@@ -49,7 +49,7 @@ npx -y statuser scenarios deploy
 
 ## Быстрый старт
 
-1. Создайте ключ в панели: «Настройки аккаунта → API и MCP».
+1. Создайте ключ в [панели Statuser](https://statuser.cloud/my/account/api-keys): «Настройки аккаунта → API и MCP».
 2. Сохраните его на этой машине:
 
    ```console
