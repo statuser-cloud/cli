@@ -1,0 +1,121 @@
+name: Sync openapi spec
+
+# The backend dispatches `backend-deployed` here after a production deploy
+# once its GitHub App has access to this repository; the daily cron is the
+# safety net.
+on:
+  repository_dispatch:
+    types: [backend-deployed]
+
+  schedule:
+    - cron: '0 6 * * *'   # daily at 06:00 UTC
+
+  # Manual trigger from the Actions tab.
+  workflow_dispatch:
+
+# Run at most one instance at a time. If two dispatches arrive within a
+# minute, process the runs sequentially to avoid competing PRs.
+concurrency:
+  group: sync-spec
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch latest spec and regenerate types
+        run: npm run fetch-spec
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet spec/ src/generated/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No spec changes — skipping PR creation."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Hand-copied enums are pinned to the spec, so a value the API added
+      # fails typecheck here. That must not stop the PR from opening — the
+      # fresh spec is exactly what the fix needs — so the errors go into the
+      # PR body instead. PRs opened with GITHUB_TOKEN trigger no other
+      # workflows, so the body is the only place they would show up.
+      - name: Typecheck
+        id: typecheck
+        if: steps.diff.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee "$RUNNER_TEMP/typecheck.log"
+
+      - name: Collect typecheck errors
+        if: steps.typecheck.outcome == 'failure'
+        run: |
+          {
+            echo 'TYPECHECK_WARNING<<TYPECHECK_EOF'
+            echo '> [!WARNING]'
+            echo '> **Typecheck fails on the new spec.** A hand-copied enum no longer'
+            echo '> matches the API — update it in this PR before merging.'
+            echo
+            echo '```'
+            grep 'error TS' "$RUNNER_TEMP/typecheck.log" | head -20
+            echo '```'
+            echo
+            echo 'TYPECHECK_EOF'
+          } >> "$GITHUB_ENV"
+
+      - name: Lint
+        if: steps.diff.outputs.changed == 'true'
+        run: npm run lint
+
+      - name: Build
+        if: steps.diff.outputs.changed == 'true' && steps.typecheck.outcome == 'success'
+        run: npm run build
+
+      - name: Open pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore: sync openapi spec'
+          title: 'Sync openapi spec from production'
+          body: |
+            ${{ env.TYPECHECK_WARNING }}
+            Auto-PR opened by the **Sync openapi spec** workflow.
+
+            **Source:**
+            - Trigger: `${{ github.event_name }}`
+            - Backend release: `${{ github.event.client_payload.backend_tag || 'n/a' }}`
+            - Backend commit: `${{ github.event.client_payload.backend_sha || 'n/a' }}`
+            - Backend deploy: `${{ github.event.client_payload.deployed_at || 'n/a' }}`
+
+            **What changed:**
+            - `spec/openapi.json` refreshed from production `/swagger-json`.
+            - `src/generated/openapi.ts` regenerated.
+
+            The CLI commands are hand-written, so a new spec changes nothing
+            by itself: merge when typecheck passes. A field the commands use that
+            was removed or renamed shows up as a typecheck error above.
+          branch: chore/sync-spec
+          base: main
+          delete-branch: true
+          labels: |
+            automated
+            spec-sync
