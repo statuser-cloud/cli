@@ -629,3 +629,16 @@ describe('thirteenth review round', () => {
     expect(server?.requests ?? []).toHaveLength(0);
   });
 });
+
+describe('fourteenth review round', () => {
+  it('does not echo a malformed --env argument', async () => {
+    const file = join(tempDir(), 'a.spec.ts');
+    writeFileSync(file, 'test("a", async () => {})');
+    const result = await cli(
+      () => ({ body: {} }),
+      ['scenarios', 'test', file, '--env', '=hunter22-secret'],
+    );
+    expect(result.code).toBe(2);
+    expect(result.stderr).not.toContain('hunter22');
+  });
+});

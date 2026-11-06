@@ -59,10 +59,12 @@ export function registerScenariosCommands(program: Command): void {
         throw new CliError(t.optLocation, ExitCode.Usage);
       }
       const env = Object.create(null) as Record<string, string>;
-      for (const raw of opts.env) {
+      for (const [position, raw] of opts.env.entries()) {
         const index = raw.indexOf('=');
-        if (index <= 0)
-          throw new CliError(t.apiFieldInvalid(raw), ExitCode.Usage);
+        // The argument may be a bare value: it is never quoted back.
+        if (index <= 0) {
+          throw new CliError(t.envArgInvalid(position + 1), ExitCode.Usage);
+        }
         env[raw.slice(0, index)] = resolveEnvValue(
           raw.slice(index + 1),
           file,

@@ -405,6 +405,8 @@ const ru = {
     `в ${file} нет ни одного test(...) — такой сценарий ничего не проверял бы`,
   cfgIntervalBelowTimeout: 'не меньше таймаута',
   cfgEnvTooMany: (max: number) => `не больше ${max} переменных`,
+  envArgInvalid: (position: number) =>
+    `--env №${position}: ожидается KEY=VALUE (значение не показано)`,
   cfgEnvName: (name: string) =>
     `${name}: имя — ЗАГЛАВНЫМИ латинскими буквами и не из служебных`,
   cfgEnvValue: (name: string) => `${name}: значение больше 4 КБ`,
@@ -807,6 +809,8 @@ const en: Messages = {
     `${file} has no test(...) call — such a scenario would check nothing`,
   cfgIntervalBelowTimeout: 'must not be less than the timeout',
   cfgEnvTooMany: (max) => `no more than ${max} variables`,
+  envArgInvalid: (position) =>
+    `--env #${position}: KEY=VALUE expected (the value is not shown)`,
   cfgEnvName: (name) => `${name}: the name must be UPPER_CASE and not reserved`,
   cfgEnvValue: (name) => `${name}: value larger than 4 KB`,
   cfgHostInternal:
