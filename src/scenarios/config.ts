@@ -197,7 +197,9 @@ export async function loadScenarioConfig(
     let resolvedEnv: Record<string, string> | undefined;
     if (item.env !== undefined) {
       if (!isObject(item.env)) return fail(`${at}.env: ${t.cfgObject}`);
-      resolvedEnv = {};
+      // No prototype: `__proto__` from the file must stay a key and fail the
+      // name check, not vanish — an empty env deletes every saved variable.
+      resolvedEnv = Object.create(null) as Record<string, string>;
       for (const [key, value] of Object.entries(item.env)) {
         if (typeof value !== 'string') {
           return fail(`${at}.env.${key}: ${t.cfgString}`);

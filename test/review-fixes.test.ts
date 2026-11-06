@@ -419,3 +419,33 @@ describe('sixth review round', () => {
     ).not.toThrow();
   });
 });
+
+describe('seventh review round', () => {
+  it('masks a secret cut by the backend at the end of a line', () => {
+    const masked = maskSecrets(
+      {
+        error: null,
+        console: [{ text: 'creds: hunter22-long…'.replace('-long', '') }],
+      },
+      ['hunter22-long-password'],
+    );
+    expect(masked.console![0]!.text).toBe('creds: ***…');
+  });
+
+  it('rejects an env named __proto__ instead of deleting saved variables', async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, 'a.spec.ts'), 'test("a", async () => {})');
+    const config = join(dir, 'statuser.json');
+    writeFileSync(
+      config,
+      '{"project_id":100000,"scenarios":[{"name":"A","file":"a.spec.ts","env":{"__proto__":"x"}}]}',
+    );
+    await expect(loadScenarioConfig(config)).rejects.toThrow(/__proto__/);
+  });
+
+  it('masks the whole value of a secret header other than Authorization', () => {
+    expect(redactReplay("curl -H 'X-Auth:correct horse battery'")).toBe(
+      "curl -H 'X-Auth: ***'",
+    );
+  });
+});

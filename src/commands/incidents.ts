@@ -266,8 +266,11 @@ export function redactReplay(replay: string): string {
     const key = header.slice(0, colon).trim();
     const value = header.slice(colon + 1).trim();
     if (!value || !isSecretHeader(key)) return whole;
-    // The scheme says what to substitute; the backend keeps it too.
-    const scheme = /^([A-Za-z][A-Za-z0-9-]*)\s+\S/.exec(value)?.[1];
+    // The scheme says what to substitute; like the backend, it is kept only
+    // for Authorization — elsewhere the first word is part of the secret.
+    const scheme = /authorization/i.test(key)
+      ? /^([A-Za-z][A-Za-z0-9-]*)\s+\S/.exec(value)?.[1]
+      : undefined;
     return `-H '${key}: ${scheme ? `${scheme} ***` : '***'}'`;
   });
 }

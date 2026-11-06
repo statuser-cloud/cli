@@ -57,7 +57,7 @@ export function registerScenariosCommands(program: Command): void {
       if (!SCENARIO_LOCATIONS.includes(opts.location as never)) {
         throw new CliError(t.optLocation, ExitCode.Usage);
       }
-      const env: Record<string, string> = {};
+      const env = Object.create(null) as Record<string, string>;
       for (const raw of opts.env) {
         const index = raw.indexOf('=');
         if (index <= 0)
@@ -286,9 +286,9 @@ export function maskSecrets(
   if (!values.length) return result;
   const mask = <T extends string | null | undefined>(text: T): T =>
     typeof text === 'string'
-      ? (values.reduce(
-          (acc, secret) => acc.split(secret).join('***'),
-          text,
+      ? (maskCutTail(
+          values.reduce((acc, secret) => acc.split(secret).join('***'), text),
+          values,
         ) as T)
       : text;
   return {
@@ -301,4 +301,26 @@ export function maskSecrets(
         text: mask(entry.text) ?? '',
       })) ?? null,
   };
+}
+
+/**
+ * The backend cuts long diagnostic lines and appends `…`, so a secret at
+ * the cut is only partly there and `split` cannot find it. A line ending
+ * in the start of a known value loses that tail.
+ */
+function maskCutTail(text: string, values: string[]): string {
+  if (!text.endsWith('…')) return text;
+  const body = text.slice(0, -1);
+  for (const value of values) {
+    for (
+      let length = Math.min(value.length - 1, body.length);
+      length > 0;
+      length -= 1
+    ) {
+      if (body.endsWith(value.slice(0, length))) {
+        return `${body.slice(0, -length)}***…`;
+      }
+    }
+  }
+  return text;
 }
