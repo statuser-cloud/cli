@@ -45,6 +45,11 @@ export function registerApiCommand(program: Command): void {
       if (hasFields && opts.input) {
         throw new CliError(t.apiFieldsWithInput, ExitCode.Usage);
       }
+      // fetch refuses a body on GET before sending, which would surface as a
+      // network error with exit code 1.
+      if (opts.input && method === 'GET') {
+        throw new CliError(t.apiInputWithGet, ExitCode.Usage);
+      }
 
       // Like `gh api`: fields of a read request are query parameters.
       const fieldsAsQuery = method === 'GET' || method === 'DELETE';

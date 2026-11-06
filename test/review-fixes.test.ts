@@ -587,3 +587,16 @@ describe('tenth review round', () => {
     ).toThrow(/http_auth_password/);
   });
 });
+
+describe('twelfth review round', () => {
+  it('api --input with GET is a usage error before any request', async () => {
+    const file = join(tempDir(), 'body.json');
+    writeFileSync(file, '{}');
+    const result = await cli(
+      () => ({ body: {} }),
+      ['api', '/v1/servers', '--input', file],
+    );
+    expect(result.code).toBe(2);
+    expect(server!.requests).toHaveLength(0);
+  });
+});

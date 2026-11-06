@@ -67,6 +67,8 @@ const ru = {
   optRawField: 'поле key=value, значение всегда строка',
   optInput: 'тело запроса из файла, `-` — из stdin',
   apiFieldInvalid: (raw: string) => `Ожидается key=value: ${raw}`,
+  apiInputWithGet:
+    'У GET нет тела: для --input укажите метод, например -X POST.',
   apiFieldsWithInput: 'Нельзя одновременно передавать поля и --input.',
   apiMethodInvalid: (method: string) => `Неизвестный метод: ${method}`,
   apiPathInvalid: 'Путь должен начинаться с /, например /v1/servers',
@@ -482,6 +484,7 @@ const en: Messages = {
   optRawField: 'field key=value, value is always a string',
   optInput: 'request body from a file, `-` for stdin',
   apiFieldInvalid: (raw) => `Expected key=value: ${raw}`,
+  apiInputWithGet: 'GET has no body: give --input a method, e.g. -X POST.',
   apiFieldsWithInput: 'Fields and --input cannot be combined.',
   apiMethodInvalid: (method) => `Unknown method: ${method}`,
   apiPathInvalid: 'The path must start with /, e.g. /v1/servers',

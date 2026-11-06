@@ -169,6 +169,9 @@ function runChild(
       // the command; sending them again would turn one Ctrl+C into two and
       // cut short a command that cleans up on the first. The listener stays
       // anyway: without it Node exits at once and the ping is never sent.
+      // A SIGINT or SIGHUP sent to our pid alone (`kill -INT` from another
+      // terminal) is not passed on here; SIGTERM is, and it is the signal to
+      // stop a run from outside.
       if (!ownGroup && signal !== 'SIGTERM') return;
       try {
         if (ownGroup && child.pid) process.kill(-child.pid, signal);
