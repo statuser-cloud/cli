@@ -1,5 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { inspect } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { redactReplay } from '../src/commands/incidents.js';
 import { maskSecrets } from '../src/commands/scenarios.js';
@@ -7,6 +8,7 @@ import { localizeError } from '../src/commander-i18n.js';
 import { loadScenarioConfig } from '../src/scenarios/config.js';
 import { buildDeployPlan } from '../src/scenarios/plan.js';
 import { CliError } from '../src/errors.js';
+import { isDuplicateOf } from '../src/servers-config/fields.js';
 import { parseServersSection } from '../src/servers-config/parse.js';
 import { checkScenarioLimits } from '../src/servers-config/plan.js';
 import { bulkTargetProblem, planServerPatch } from '../src/servers-update.js';
@@ -723,5 +725,39 @@ describe('sixteenth review round', () => {
       ['servers', 'get', '1', '--json'],
     );
     expect(result.stdout).not.toContain('live-key-1');
+  });
+});
+
+describe('seventeenth review round', () => {
+  it('masks a secret printed inside an object by console.log', () => {
+    const secret = 'ab\\cd"ef';
+    const line = inspect({ password: secret });
+    const masked = maskSecrets({ error: null, console: [{ text: line }] }, [
+      secret,
+    ]);
+    expect(masked.console![0]!.text).toBe("{ password: '***' }");
+  });
+
+  it('treats a null keyword mode as matching any mode, as the API does', () => {
+    expect(
+      isDuplicateOf(
+        {
+          protocol: 'keyword',
+          host: 'https://a.example.com',
+          http_method: 'get',
+          body: null,
+          keyword: 'OK',
+          keyword_mode: null,
+        },
+        {
+          protocol: 'keyword',
+          host: 'https://a.example.com',
+          http_method: 'get',
+          body: '',
+          keyword: 'OK',
+          keyword_mode: 'present',
+        },
+      ),
+    ).toBe(true);
   });
 });

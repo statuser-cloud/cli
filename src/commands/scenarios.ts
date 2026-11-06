@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { readFile } from 'node:fs/promises';
+import { inspect } from 'node:util';
 import { authedClient, globalOptions } from '../context.js';
 import { CliError, ExitCode } from '../errors.js';
 import type { components } from '../generated/openapi.js';
@@ -300,7 +301,13 @@ export function maskSecrets(
 function secretForms(secrets: string[]): string[] {
   const forms = new Set<string>();
   for (const secret of secrets) {
-    for (const form of [secret, JSON.stringify(secret).slice(1, -1)]) {
+    // `console.log({ password })` prints the value through util.inspect,
+    // with its own escaping and quote choice.
+    for (const form of [
+      secret,
+      JSON.stringify(secret).slice(1, -1),
+      inspect(secret).slice(1, -1),
+    ]) {
       for (const variant of [form, form.trimEnd()]) {
         if (variant) forms.add(variant);
       }

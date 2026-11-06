@@ -157,3 +157,34 @@ export function duplicateKey(state: Record<string, unknown>): string {
   if (protocol === 'keyword') parts.push(str('keyword'), str('keyword_mode'));
   return JSON.stringify(parts);
 }
+
+/**
+ * Whether the API would take `existing` for a duplicate of `next`
+ * (`findDuplicateServer`). Directed: a null port, method, keyword or mode
+ * of `next` is left out of the search, so it matches any value there.
+ * `duplicateKey` stays the test for "the identity changed".
+ */
+export function isDuplicateOf(
+  next: Record<string, unknown>,
+  existing: Record<string, unknown>,
+): boolean {
+  const protocol = next.protocol as string;
+  if (existing.protocol !== protocol) return false;
+  if (protocol === 'heartbeat' || protocol === 'llm') {
+    return duplicateKey(next) === duplicateKey(existing);
+  }
+  const value = (state: Record<string, unknown>, field: string) =>
+    normalize(field, state[field]) ?? null;
+  const same = (field: string) => value(next, field) === value(existing, field);
+  const sameIfSet = (field: string) =>
+    value(next, field) === null || same(field);
+  if (!same('host')) return false;
+  if (protocol === 'tcp' && !sameIfSet('port')) return false;
+  if (protocol === 'http' || protocol === 'keyword') {
+    if (!sameIfSet('http_method') || !same('body')) return false;
+  }
+  if (protocol === 'keyword') {
+    return sameIfSet('keyword') && sameIfSet('keyword_mode');
+  }
+  return true;
+}

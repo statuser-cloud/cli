@@ -2,7 +2,7 @@ import type { Server } from '../commands/servers.js';
 import { CliError, ExitCode } from '../errors.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
-import { duplicateKey, sameValue } from './fields.js';
+import { duplicateKey, isDuplicateOf, sameValue } from './fields.js';
 import { isForbiddenHost } from './forbidden-host.js';
 import type { DesiredServer } from './parse.js';
 
@@ -361,7 +361,7 @@ function checkDuplicates(steps: ServerStep[], account: Server[]): void {
       continue;
     }
     for (const [other, item] of states) {
-      if (other !== slot && duplicateKey(item.state) === key) {
+      if (other !== slot && isDuplicateOf(state, item.state)) {
         fail(t.applyDuplicate(label, item.label));
       }
     }
