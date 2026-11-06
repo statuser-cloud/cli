@@ -90,11 +90,20 @@ function promptHidden(question: string): Promise<string> {
     },
   });
   const rl = createInterface({ input: process.stdin, output, terminal: true });
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let answered = false;
     rl.question(question, (answer) => {
+      answered = true;
       rl.close();
       process.stderr.write('\n');
       resolve(answer);
+    });
+    // Ctrl+D closes the prompt without an answer; without this the promise
+    // never settles and Node exits with its own code 13.
+    rl.on('close', () => {
+      if (answered) return;
+      process.stderr.write('\n');
+      reject(new CliError(t.loginEmptyKey, ExitCode.Usage));
     });
     muted = true;
   });

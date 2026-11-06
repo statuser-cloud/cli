@@ -785,3 +785,14 @@ describe('eighteenth review round', () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ exit_code: 127 });
   });
 });
+
+describe('nineteenth review round', () => {
+  it('keeps no word of a secret header that only contains "authorization"', () => {
+    expect(
+      redactReplay("curl -H 'X-Authorization-Token:live-secret more'"),
+    ).toBe("curl -H 'X-Authorization-Token: ***'");
+    expect(redactReplay("curl -H 'Authorization:Bearer abc'")).toBe(
+      "curl -H 'Authorization: Bearer ***'",
+    );
+  });
+});

@@ -274,8 +274,10 @@ export function redactReplay(replay: string): string {
     if (!value || !isSecretHeader(key)) return whole;
     // The scheme says what to substitute; like the backend, it is kept only
     // for Authorization — elsewhere the first word is part of the secret.
-    const scheme = /authorization/i.test(key)
-      ? /^([A-Za-z][A-Za-z0-9-]*)\s+\S/.exec(value)?.[1]
+    // Only the real header and a known scheme: in `X-Authorization-Token:
+    // live-secret more` the first word is the secret.
+    const scheme = /^(proxy-)?authorization$/i.test(key)
+      ? /^(Basic|Bearer|Digest|Negotiate|NTLM)\s+\S/i.exec(value)?.[1]
       : undefined;
     return `-H '${key}: ${scheme ? `${scheme} ***` : '***'}'`;
   });
