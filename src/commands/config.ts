@@ -5,6 +5,7 @@ import { authedClient, globalOptions } from '../context.js';
 import {
   CliError,
   ExitCode,
+  NotSentError,
   StatuserApiError,
   type ExitCodeValue,
 } from '../errors.js';
@@ -320,6 +321,17 @@ async function execute(
       applied.push(await write.run());
       if (!quiet) printLine(t.deployApplied(write.name));
     } catch (error) {
+      if (error instanceof NotSentError) {
+        return {
+          applied,
+          failure: {
+            name: write.name,
+            message: t.deployStopped(write.name, error.message),
+            exitCode: ExitCode.Failure,
+            outcome_unknown: false,
+          },
+        };
+      }
       if (error instanceof StatuserApiError) {
         return {
           applied,

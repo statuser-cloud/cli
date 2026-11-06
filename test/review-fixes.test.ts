@@ -6,6 +6,7 @@ import { localizeError } from '../src/commander-i18n.js';
 import { loadScenarioConfig } from '../src/scenarios/config.js';
 import { CliError } from '../src/errors.js';
 import { parseServersSection } from '../src/servers-config/parse.js';
+import { checkScenarioLimits } from '../src/servers-config/plan.js';
 import { bulkTargetProblem, planServerPatch } from '../src/servers-update.js';
 import {
   runCli,
@@ -297,5 +298,62 @@ describe('servers section checks', () => {
 describe('commander errors in Russian', () => {
   it('rewrites known parse errors', () => {
     expect(localizeError("error: unknown option '--x'")).toMatch(/--x/);
+  });
+});
+
+describe('third review round', () => {
+  it('masks a secret printed inside JSON', () => {
+    const secret = 'ab"cd\\ef';
+    const masked = maskSecrets(
+      { error: null, console: [{ text: JSON.stringify({ p: secret }) }] },
+      [secret],
+    );
+    expect(masked.console![0]!.text).toBe('{"p":"***"}');
+  });
+
+  it('lets a scenario be renamed on a plan without scenarios', () => {
+    expect(() =>
+      checkScenarioLimits(
+        [
+          {
+            kind: 'update',
+            fields: ['name'],
+            scenario: { name: 'S', interval: 30, timeout: 600 },
+          },
+        ],
+        1,
+        { ...plan.features, scenarios_limit: 0 } as never,
+      ),
+    ).not.toThrow();
+  });
+
+  it('maintenance end --json shows the posted message', async () => {
+    const item = {
+      id: 7,
+      started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      ended_at: new Date(Date.now() - 60_000).toISOString(),
+      updates: [],
+    };
+    const result = await cli(
+      (r) => ({
+        body:
+          r.method === 'GET'
+            ? [item]
+            : { ...item, updates: [{ id: 1, message: 'Done' }] },
+      }),
+      [
+        'maintenance',
+        'end',
+        '7',
+        '--page',
+        '12',
+        '--message',
+        'Done',
+        '--json',
+      ],
+    );
+    expect(JSON.parse(result.stdout).updates).toEqual([
+      { id: 1, message: 'Done' },
+    ]);
   });
 });

@@ -273,8 +273,16 @@ export function maskSecrets(
   result: ScenarioRunResponse,
   secrets: string[],
 ): ScenarioRunResponse {
-  // Longest first, so a secret containing another is masked whole.
-  const values = secrets.filter(Boolean).sort((a, b) => b.length - a.length);
+  // A value printed inside JSON (`JSON.stringify` in the script) carries
+  // escapes, so the escaped form is masked as well. Longest first, so a
+  // secret containing another is masked whole.
+  const values = [
+    ...new Set(
+      secrets
+        .filter(Boolean)
+        .flatMap((secret) => [secret, JSON.stringify(secret).slice(1, -1)]),
+    ),
+  ].sort((a, b) => b.length - a.length);
   if (!values.length) return result;
   const mask = <T extends string | null | undefined>(text: T): T =>
     typeof text === 'string'

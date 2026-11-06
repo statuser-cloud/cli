@@ -1,5 +1,10 @@
 import { createRequire } from 'node:module';
-import { CliError, ExitCode, parseApiErrorBody } from './errors.js';
+import {
+  CliError,
+  ExitCode,
+  NotSentError,
+  parseApiErrorBody,
+} from './errors.js';
 import { t } from './i18n.js';
 
 const require = createRequire(import.meta.url);
@@ -102,14 +107,14 @@ export class StatuserClient {
         });
       } catch (error) {
         const reason = describeFetchError(error);
-        if (
-          NOT_SENT_CODES.has(reason) &&
-          connectRetries < MAX_CONNECT_RETRIES
-        ) {
-          connectRetries += 1;
-          this.debug(`× ${reason}, retrying`);
-          await sleep(CONNECT_RETRY_DELAY_MS * connectRetries);
-          continue;
+        if (NOT_SENT_CODES.has(reason)) {
+          if (connectRetries < MAX_CONNECT_RETRIES) {
+            connectRetries += 1;
+            this.debug(`× ${reason}, retrying`);
+            await sleep(CONNECT_RETRY_DELAY_MS * connectRetries);
+            continue;
+          }
+          throw new NotSentError(t.networkError(reason));
         }
         throw new CliError(t.networkError(reason));
       }

@@ -116,17 +116,20 @@ function checkNames(desired: DesiredServer[], inProject: Server[]): void {
   const pinned = new Set(
     desired.map((e) => e.id).filter((id) => id !== undefined),
   );
-  const fileNames = new Map<string, string>();
+  // Only a name match can be ambiguous: two entries pinned by id may share
+  // a name, as two servers of the project may (an own export has them).
+  const fileNames = new Map<string, DesiredServer>();
   for (const entry of desired) {
     if (entry.name === null) continue;
     const other = fileNames.get(entry.name);
-    if (other) fail(t.applyDuplicateName(entry.at, other, entry.name));
-    fileNames.set(entry.name, entry.at);
+    if (other && (other.id === undefined || entry.id === undefined)) {
+      fail(t.applyDuplicateName(entry.at, other.at, entry.name));
+    }
+    if (!other || entry.id === undefined) fileNames.set(entry.name, entry);
   }
   for (const server of inProject) {
     if (server.name === null || pinned.has(server.id)) continue;
-    const at = fileNames.get(server.name);
-    const entry = desired.find((e) => e.at === at);
+    const entry = fileNames.get(server.name);
     // A pinned entry taking the name of another server of the project.
     if (entry && entry.id !== undefined) {
       fail(t.applyNameTaken(entry.at, server.name, server.id));
@@ -247,7 +250,7 @@ function checkAuth(steps: ServerStep[], byId: Map<number, Server>): void {
     }
     if (type === 'none') continue;
     const username = body.http_auth_username ?? current?.http_auth_username;
-    if (type === 'basic' && !username) {
+    if (type === 'basic' && !String(username ?? '').trim()) {
       fail(t.applyFieldRequired(step.entry.at, 'http_auth_username'));
     }
     const typeChanged = !current || current.http_auth_type !== type;
@@ -403,8 +406,10 @@ function requirements(step: ServerStep, current?: Server): Requirements {
   ) {
     needs.push('incident_debounce_enabled');
   }
-  const codes = body.success_http_codes;
-  if (Array.isArray(codes) && !(codes.length === 1 && codes[0] === '2xx')) {
+  const codes = (body.success_http_codes as string[] | undefined)?.map((c) =>
+    c.trim().toLowerCase(),
+  );
+  if (codes && !(codes.length === 1 && codes[0] === '2xx')) {
     needs.push('custom_success_http_codes_enabled');
   }
   return {
@@ -475,17 +480,21 @@ export function checkScenarioLimits(
   steps: Array<{
     kind: string;
     scenario: { name: string; interval: number; timeout: number };
+    fields?: string[];
   }>,
   existingScenarios: number,
   features: PlanFeatures,
 ): void {
   const creates = steps.filter((s) => s.kind === 'create').length;
-  // Without scenarios on the plan the backend refuses any write to one,
-  // not only new ones (`validateScenarioFeatures`).
-  if (
-    features.scenarios_limit <= 0 &&
-    steps.some((s) => s.kind !== 'unchanged')
-  ) {
+  // The backend checks the plan on a create and on any change to the
+  // scenario or its interval (`validateScenarioFeatures`); a rename alone
+  // passes even on a plan without scenarios.
+  const gated = steps.filter(
+    (s) =>
+      s.kind === 'create' ||
+      (s.kind === 'update' && (s.fields ?? []).some((f) => f !== 'name')),
+  );
+  if (features.scenarios_limit <= 0 && gated.length) {
     fail(t.applyFeatureUnavailable('scenarios', 'scenarios_limit'));
   }
   if (creates && existingScenarios + creates > features.scenarios_limit) {
@@ -497,8 +506,7 @@ export function checkScenarioLimits(
       ),
     );
   }
-  for (const step of steps) {
-    if (step.kind === 'unchanged') continue;
+  for (const step of gated) {
     const { name, interval, timeout } = step.scenario;
     if (interval < features.scenario_min_check_interval_seconds) {
       fail(

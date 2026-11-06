@@ -22,6 +22,14 @@ export class CliError extends Error {
   }
 }
 
+/** The connection was never set up: the request surely did not leave. */
+export class NotSentError extends CliError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotSentError';
+  }
+}
+
 export class StatuserApiError extends Error {
   constructor(
     readonly status: number,

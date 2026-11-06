@@ -406,6 +406,8 @@ const ru = {
   cfgEnvName: (name: string) =>
     `${name}: имя — ЗАГЛАВНЫМИ латинскими буквами и не из служебных`,
   cfgEnvValue: (name: string) => `${name}: значение больше 4 КБ`,
+  cfgHostInternal:
+    'внутренний адрес: проверки идут снаружи, и API его не примет',
   cfgHostInvalid: 'не похоже на адрес: домен, IP или URL',
   cfgUsernameColon: 'в логине не может быть двоеточия',
   cfgControlChars: 'управляющие символы недопустимы',
@@ -804,6 +806,8 @@ const en: Messages = {
   cfgEnvTooMany: (max) => `no more than ${max} variables`,
   cfgEnvName: (name) => `${name}: the name must be UPPER_CASE and not reserved`,
   cfgEnvValue: (name) => `${name}: value larger than 4 KB`,
+  cfgHostInternal:
+    'an internal address: checks run from outside, and the API refuses it',
   cfgHostInvalid: 'not an address: a domain, IP or URL expected',
   cfgUsernameColon: 'the username cannot contain a colon',
   cfgControlChars: 'control characters are not allowed',

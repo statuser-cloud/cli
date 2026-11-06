@@ -134,7 +134,7 @@ export function registerMaintenanceCommands(program: Command): void {
         current.updates.some((update) => update.message.trim() === message);
       if (message && !alreadyPosted) {
         try {
-          await client.call({
+          result = await client.call<Maintenance>({
             method: 'POST',
             path: `${base}/${id}/updates`,
             body: { message },

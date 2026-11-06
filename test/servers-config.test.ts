@@ -447,3 +447,79 @@ describe('buildServersPlan after review', () => {
     ).toThrow(/ssl_monitoring_enabled/);
   });
 });
+
+describe('third review round', () => {
+  it('refuses an internal address literal before any write', () => {
+    for (const host of ['127.0.0.1', 'http://10.1.2.3:8080/x', '[::1]']) {
+      expect(() => parse([{ name: 'A', protocol: 'ping', host }])).toThrow(
+        /host/,
+      );
+    }
+    expect(() =>
+      parse([{ name: 'A', protocol: 'ping', host: '8.8.8.8' }]),
+    ).not.toThrow();
+  });
+
+  it('refuses blank required strings the API trims to empty', () => {
+    expect(() =>
+      parse([
+        {
+          name: 'W',
+          protocol: 'keyword',
+          host: 'https://a.example.com',
+          keyword: '  ',
+        },
+      ]),
+    ).toThrow(/keyword/);
+    expect(() =>
+      parse(
+        [
+          {
+            name: 'L',
+            protocol: 'llm',
+            host: 'https://api.example.com',
+            llm_model: 'm',
+            llm_api_key: '$KEY',
+          },
+        ],
+        { KEY: '   ' },
+      ),
+    ).toThrow(/llm_api_key/);
+    const desired = parse([
+      {
+        name: 'B',
+        protocol: 'http',
+        host: 'https://a.example.com',
+        http_auth_type: 'basic',
+        http_auth_username: '   ',
+        http_auth_password: 'p',
+      },
+    ]);
+    expect(() => buildServersPlan(desired, 100000, [], features)).toThrow(
+      /http_auth_username/,
+    );
+  });
+
+  it('treats 2XX as the default success code, not a paid feature', () => {
+    const desired = parse([
+      {
+        name: 'A',
+        protocol: 'http',
+        host: 'https://a.example.com',
+        success_http_codes: [' 2XX '],
+      },
+    ]);
+    expect(() => buildServersPlan(desired, 100000, [], features)).not.toThrow();
+  });
+
+  it('applies its own export with two servers of one name', () => {
+    const inProject = [
+      server(),
+      server({ id: 2, host: 'https://b.example.com' }),
+    ];
+    const { entries } = exportServers(inProject);
+    const desired = parse(entries);
+    const plan = buildServersPlan(desired, 100000, inProject, features);
+    expect(plan.steps.map((s) => s.kind)).toEqual(['unchanged', 'unchanged']);
+  });
+});

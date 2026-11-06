@@ -1,5 +1,6 @@
 import { t } from '../i18n.js';
 import { HOST_PATTERN } from './host-pattern.js';
+import { isForbiddenHostLiteral } from './forbidden-host.js';
 import { resolveEnvValue } from '../scenarios/config.js';
 import {
   fieldsFor,
@@ -146,8 +147,9 @@ export function parseServersSection(
           return fail(`${at}.${key}: ${t.cfgString}`);
         }
         let resolved = resolveEnvValue(value, `${at}.${key}`, env);
-        if (key === 'http_auth_token') {
-          // The backend trims a token and refuses an empty one.
+        if (key === 'http_auth_token' || key === 'llm_api_key') {
+          // The backend trims a token or key and refuses an empty one: a
+          // blank LLM key would silently leave the check without the model.
           resolved = resolved.trim();
           if (!resolved) return fail(`${at}.${key}: ${t.cfgString}`);
         }
@@ -181,6 +183,11 @@ export function parseServersSection(
           }
         }
         fields.headers = headers;
+        continue;
+      }
+      if (key === 'success_http_codes') {
+        // Stored as the API stores them, so the plan check sees `2xx`.
+        fields[key] = (value as string[]).map((v) => v.trim().toLowerCase());
         continue;
       }
       fields[key] = value;
@@ -219,6 +226,13 @@ function checkField(
     if (typeof value !== 'string') return t.cfgString;
     if (key === 'host' && !HOST_PATTERN.test(value.trim())) {
       return t.cfgHostInvalid;
+    }
+    if (key === 'host' && isForbiddenHostLiteral(value)) {
+      return t.cfgHostInternal;
+    }
+    // The API trims these and refuses an empty result.
+    if ((key === 'keyword' || key === 'llm_model') && !value.trim()) {
+      return t.cfgString;
     }
     if (key === 'http_auth_username') {
       // RFC 7617: the colon separates username and password.
