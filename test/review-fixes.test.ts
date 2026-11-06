@@ -761,3 +761,27 @@ describe('seventeenth review round', () => {
     ).toBe(true);
   });
 });
+
+describe('eighteenth review round', () => {
+  it('masks a long multiline secret printed inside an object', () => {
+    const secret = `${'A'.repeat(80)}\n${'B'.repeat(80)}`;
+    const line = inspect({ nested: { password: secret } });
+    const masked = maskSecrets({ error: null, console: [{ text: line }] }, [
+      secret,
+    ]).console![0]!.text;
+    expect(masked).not.toContain('AAAA');
+    expect(masked).not.toContain('BBBB');
+  });
+
+  it('pings failure when the command cannot even be spawned', async () => {
+    const api = await startFakeApi(() => ({ status: 204 }));
+    server = api;
+    const result = await runCli(
+      ['--json', 'run', '--heartbeat', 'tok', '--', `/tmp/${'x'.repeat(300)}`],
+      { STATUSER_API_URL: api.url },
+    );
+    expect(result.code).toBe(127);
+    expect(api.requests.map((r) => r.path)).toEqual(['/v1/heartbeat/tok/fail']);
+    expect(JSON.parse(result.stdout)).toMatchObject({ exit_code: 127 });
+  });
+});

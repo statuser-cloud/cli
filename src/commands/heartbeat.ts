@@ -158,11 +158,21 @@ function runChild(
 ): Promise<number> {
   return new Promise((resolve) => {
     const ownGroup = process.platform !== 'win32' && !process.stdin.isTTY;
-    const child = spawn(file, args, {
-      stdio: stdoutToStderr ? ['inherit', 2, 'inherit'] : 'inherit',
-      shell: false,
-      detached: ownGroup,
-    });
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(file, args, {
+        stdio: stdoutToStderr ? ['inherit', 2, 'inherit'] : 'inherit',
+        shell: false,
+        detached: ownGroup,
+      });
+    } catch (error) {
+      // Some failures (ENAMETOOLONG, a bad argument) are thrown at once
+      // instead of emitted; they still end in a failure ping and a report.
+      const code = (error as NodeJS.ErrnoException).code;
+      printErr(t.runSpawnFailed(file, (error as Error).message));
+      resolve(code === 'EACCES' ? 126 : 127);
+      return;
+    }
     const forwarded = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
     const forward = (signal: NodeJS.Signals) => {
       // In a shared group the terminal already delivers Ctrl+C and hangup to

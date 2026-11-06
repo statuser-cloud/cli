@@ -301,19 +301,31 @@ export function maskSecrets(
 function secretForms(secrets: string[]): string[] {
   const forms = new Set<string>();
   for (const secret of secrets) {
-    // `console.log({ password })` prints the value through util.inspect,
-    // with its own escaping and quote choice.
-    for (const form of [
-      secret,
-      JSON.stringify(secret).slice(1, -1),
-      inspect(secret).slice(1, -1),
-    ]) {
-      for (const variant of [form, form.trimEnd()]) {
-        if (variant) forms.add(variant);
-      }
+    // util.inspect (`console.log({ password })`) breaks a long multiline
+    // string into one literal per line, joined with `+` and indented by
+    // nesting: each line of the value is masked on its own too. Lines
+    // shorter than four characters are left, so as not to mask everywhere.
+    const lines = secret.includes('\n')
+      ? secret.split('\n').filter((line) => line.length >= 4)
+      : [];
+    for (const part of [secret, ...lines]) {
+      addForms(forms, part);
     }
   }
   return [...forms];
+}
+
+function addForms(forms: Set<string>, secret: string): void {
+  // util.inspect has its own escaping and quote choice.
+  for (const form of [
+    secret,
+    JSON.stringify(secret).slice(1, -1),
+    inspect(secret).slice(1, -1),
+  ]) {
+    for (const variant of [form, form.trimEnd()]) {
+      if (variant) forms.add(variant);
+    }
+  }
 }
 
 /**
