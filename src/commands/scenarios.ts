@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { readFile } from 'node:fs/promises';
 import { authedClient, globalOptions } from '../context.js';
-import { CliError, ExitCode, StatuserApiError } from '../errors.js';
+import { CliError, ExitCode } from '../errors.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
 import { printErr, printJson, printLine } from '../output.js';
@@ -16,6 +16,7 @@ import {
 } from '../scenarios/config.js';
 import { buildDeployPlan, type PlanStep } from '../scenarios/plan.js';
 import { checkScenarioLimits } from '../servers-config/plan.js';
+import { describeWriteFailure } from '../write-failure.js';
 import { listServers } from './servers.js';
 
 type ScenarioPreviewBody = components['schemas']['ScenarioPreviewDto'];
@@ -209,17 +210,9 @@ export function registerScenariosCommands(program: Command): void {
             }
             if (!json) printLine(t.deployApplied(step.scenario.name));
           } catch (error) {
-            const message =
-              error instanceof StatuserApiError
-                ? error.format()
-                : String(error);
-            if (json) printJson({ ...summary(), error: message });
-            throw new CliError(
-              t.deployStopped(step.scenario.name, message),
-              error instanceof StatuserApiError
-                ? error.exitCode
-                : ExitCode.Failure,
-            );
+            const failure = describeWriteFailure(step.scenario.name, error);
+            if (json) printJson({ ...summary(), error: failure });
+            throw new CliError(failure.message, failure.exitCode);
           }
         }
         if (json) printJson(summary());
@@ -273,24 +266,10 @@ export function maskSecrets(
   result: ScenarioRunResponse,
   secrets: string[],
 ): ScenarioRunResponse {
-  // A value printed inside JSON (`JSON.stringify` in the script) carries
-  // escapes, so the escaped form is masked as well. Longest first, so a
-  // secret containing another is masked whole.
-  const values = [
-    ...new Set(
-      secrets
-        .filter(Boolean)
-        .flatMap((secret) => [secret, JSON.stringify(secret).slice(1, -1)]),
-    ),
-  ].sort((a, b) => b.length - a.length);
+  const values = secretForms(secrets);
   if (!values.length) return result;
   const mask = <T extends string | null | undefined>(text: T): T =>
-    typeof text === 'string'
-      ? (maskCutTail(
-          values.reduce((acc, secret) => acc.split(secret).join('***'), text),
-          values,
-        ) as T)
-      : text;
+    typeof text === 'string' ? (maskText(text, values) as T) : text;
   return {
     ...result,
     error: mask(result.error),
@@ -304,23 +283,66 @@ export function maskSecrets(
 }
 
 /**
- * The backend cuts long diagnostic lines and appends `…`, so a secret at
- * the cut is only partly there and `split` cannot find it. A line ending
- * in the start of a known value loses that tail.
+ * Every form a value may take in the run's output: as given, escaped by
+ * `JSON.stringify` in the script, and without trailing whitespace, which
+ * the runner trims from console lines.
  */
-function maskCutTail(text: string, values: string[]): string {
-  if (!text.endsWith('…')) return text;
-  const body = text.slice(0, -1);
-  for (const value of values) {
-    for (
-      let length = Math.min(value.length - 1, body.length);
-      length > 0;
-      length -= 1
-    ) {
-      if (body.endsWith(value.slice(0, length))) {
-        return `${body.slice(0, -length)}***…`;
+function secretForms(secrets: string[]): string[] {
+  const forms = new Set<string>();
+  for (const secret of secrets) {
+    for (const form of [secret, JSON.stringify(secret).slice(1, -1)]) {
+      for (const variant of [form, form.trimEnd()]) {
+        if (variant) forms.add(variant);
       }
     }
   }
-  return text;
+  return [...forms];
+}
+
+/**
+ * Finds every place a value occupies in the original text first and only
+ * then replaces them: masking one value before searching for the next
+ * would break an overlapping one. The backend cuts long lines and appends
+ * `…`, so the start of a value at the cut is masked too.
+ */
+function maskText(text: string, values: string[]): string {
+  const cut = text.endsWith('…');
+  const body = cut ? text.slice(0, -1) : text;
+  const ranges: Array<[number, number]> = [];
+  for (const value of values) {
+    for (
+      let at = body.indexOf(value);
+      at >= 0;
+      at = body.indexOf(value, at + 1)
+    ) {
+      ranges.push([at, at + value.length]);
+    }
+    if (cut) {
+      for (
+        let length = Math.min(value.length - 1, body.length);
+        length > 0;
+        length -= 1
+      ) {
+        if (body.endsWith(value.slice(0, length))) {
+          ranges.push([body.length - length, body.length]);
+          break;
+        }
+      }
+    }
+  }
+  if (!ranges.length) return text;
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged: Array<[number, number]> = [];
+  for (const [start, end] of ranges) {
+    const last = merged.at(-1);
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
+  let out = '';
+  let pos = 0;
+  for (const [start, end] of merged) {
+    out += `${body.slice(pos, start)}***`;
+    pos = end;
+  }
+  return `${out}${body.slice(pos)}${cut ? '…' : ''}`;
 }

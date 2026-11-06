@@ -2,14 +2,9 @@ import type { Command } from 'commander';
 import { readFile } from 'node:fs/promises';
 import type { StatuserClient } from '../client.js';
 import { authedClient, globalOptions } from '../context.js';
-import {
-  CliError,
-  ExitCode,
-  NotSentError,
-  StatuserApiError,
-  type ExitCodeValue,
-} from '../errors.js';
+import { CliError, ExitCode } from '../errors.js';
 import { writeOwnFile } from '../files.js';
+import { describeWriteFailure, type WriteFailure } from '../write-failure.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
 import { jsonErrorPosition } from '../json-error.js';
@@ -241,12 +236,7 @@ type Applied = { name: string; action: string; id: number };
  * run; what was applied before it stays, and a repeated run continues from
  * there. A dropped connection leaves the outcome of that step unknown.
  */
-interface Failure {
-  name: string;
-  message: string;
-  exitCode: ExitCodeValue;
-  outcome_unknown: boolean;
-}
+type Failure = WriteFailure;
 
 async function execute(
   client: StatuserClient,
@@ -321,47 +311,7 @@ async function execute(
       applied.push(await write.run());
       if (!quiet) printLine(t.deployApplied(write.name));
     } catch (error) {
-      if (error instanceof NotSentError) {
-        return {
-          applied,
-          failure: {
-            name: write.name,
-            message: t.deployStopped(write.name, error.message),
-            exitCode: ExitCode.Failure,
-            outcome_unknown: false,
-          },
-        };
-      }
-      // A 4xx is a refusal; after a 5xx the write may have been stored
-      // before the answer failed, so it is an unknown outcome like a drop.
-      if (error instanceof StatuserApiError && error.status < 500) {
-        return {
-          applied,
-          failure: {
-            name: write.name,
-            message: t.deployStopped(write.name, error.format()),
-            exitCode: error.exitCode,
-            outcome_unknown: false,
-          },
-        };
-      }
-      // A network failure says nothing about whether the server applied it.
-      return {
-        applied,
-        failure: {
-          name: write.name,
-          message: t.applyUnknownOutcome(
-            write.name,
-            error instanceof StatuserApiError
-              ? error.format()
-              : error instanceof Error
-                ? error.message
-                : String(error),
-          ),
-          exitCode: ExitCode.Failure,
-          outcome_unknown: true,
-        },
-      };
+      return { applied, failure: describeWriteFailure(write.name, error) };
     }
   }
   return { applied };

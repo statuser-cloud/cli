@@ -449,3 +449,52 @@ describe('seventh review round', () => {
     );
   });
 });
+
+describe('eighth review round', () => {
+  const text = (secrets: string[], line: string) =>
+    maskSecrets({ error: null, console: [{ text: line }] }, secrets)
+      .console![0]!.text;
+
+  it('masks a value whose trailing space the runner trimmed', () => {
+    expect(text(['hunter22 '], 'pw hunter22')).toBe('pw ***');
+  });
+
+  it('masks a cut secret that contains another secret', () => {
+    expect(text(['alice', 'aliceSuperSecret'], 'x aliceSuper…')).toBe('x ***…');
+  });
+
+  it('masks two overlapping values as one span', () => {
+    expect(text(['abcd', 'cdef'], '1abcdef2')).toBe('1***2');
+  });
+
+  it('reports an unknown deploy outcome after a 5xx in JSON', async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, 'a.spec.ts'), 'test("a", async () => {})');
+    const config = join(dir, 'statuser.json');
+    writeFileSync(
+      config,
+      JSON.stringify({
+        project_id: 100000,
+        scenarios: [{ name: 'A', file: 'a.spec.ts', interval: 600 }],
+      }),
+    );
+    const result = await cli(
+      (r) => {
+        if (r.path === '/v1/billing/current-plan') return { body: plan };
+        if (r.method === 'GET') return { body: [] };
+        return { status: 502, body: { message: 'bad gateway' } };
+      },
+      ['scenarios', 'deploy', '-c', config, '--json'],
+    );
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout).error.outcome_unknown).toBe(true);
+  });
+
+  it('refuses an absurd look-back as a usage error', async () => {
+    const result = await cli(
+      () => ({ body: [] }),
+      ['incidents', 'list', '--since', '1000000000d'],
+    );
+    expect(result.code).toBe(2);
+  });
+});

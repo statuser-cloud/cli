@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { authedClient, globalOptions } from '../context.js';
-import { parseDuration } from '../duration.js';
+import { MAX_DURATION_MS, parseDuration } from '../duration.js';
 import { CliError, ExitCode } from '../errors.js';
 import { writeOwnFile } from '../files.js';
 import type { components } from '../generated/openapi.js';
@@ -212,7 +212,13 @@ export function splitList(raw: string | undefined): string[] {
 /** `24h`, `7d`-style relative windows or an ISO date. */
 export function parseWhen(raw: string, now = Date.now()): string {
   const days = /^(\d+)d$/.exec(raw.trim());
-  if (days) return new Date(now - +days[1]! * 86_400_000).toISOString();
+  if (days) {
+    const ms = +days[1]! * 86_400_000;
+    if (ms > MAX_DURATION_MS) {
+      throw new CliError(t.whenInvalid(raw), ExitCode.Usage);
+    }
+    return new Date(now - ms).toISOString();
+  }
   if (/^(?:\d+[hms])+$/.test(raw.trim())) {
     return new Date(now - parseDuration(raw)).toISOString();
   }
