@@ -62,8 +62,16 @@ export function registerScenariosCommands(program: Command): void {
       for (const [position, raw] of opts.env.entries()) {
         const index = raw.indexOf('=');
         // The argument may be a bare value: it is never quoted back.
-        if (index <= 0) {
-          throw new CliError(t.envArgInvalid(position + 1), ExitCode.Usage);
+        // A bad name may be part of a secret passed by mistake
+        // (`--env 'YWJj=='`): the problem is named by position only.
+        if (
+          index <= 0 ||
+          scenarioEnvProblem({ [raw.slice(0, index)]: '' }) !== null
+        ) {
+          throw new CliError(
+            t.argInvalid('--env', position + 1),
+            ExitCode.Usage,
+          );
         }
         env[raw.slice(0, index)] = resolveEnvValue(
           raw.slice(index + 1),

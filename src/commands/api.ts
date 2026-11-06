@@ -33,12 +33,12 @@ export function registerApiCommand(program: Command): void {
         throw new CliError(t.apiMethodInvalid(opts.method), ExitCode.Usage);
       }
       const fields: Record<string, unknown> = {};
-      for (const raw of opts.field) {
-        const [key, value] = splitField(raw);
+      for (const [position, raw] of opts.field.entries()) {
+        const [key, value] = splitField(raw, '-F', position);
         fields[key] = parseTyped(value);
       }
-      for (const raw of opts.rawField) {
-        const [key, value] = splitField(raw);
+      for (const [position, raw] of opts.rawField.entries()) {
+        const [key, value] = splitField(raw, '-f', position);
         fields[key] = value;
       }
       const hasFields = Object.keys(fields).length > 0;
@@ -89,9 +89,16 @@ export function registerApiCommand(program: Command): void {
     });
 }
 
-function splitField(raw: string): [string, string] {
+function splitField(
+  raw: string,
+  flag: string,
+  position: number,
+): [string, string] {
   const index = raw.indexOf('=');
-  if (index <= 0) throw new CliError(t.apiFieldInvalid(raw), ExitCode.Usage);
+  // The argument may be a bare secret: it is never quoted back.
+  if (index <= 0) {
+    throw new CliError(t.argInvalid(flag, position + 1), ExitCode.Usage);
+  }
   return [raw.slice(0, index), raw.slice(index + 1)];
 }
 

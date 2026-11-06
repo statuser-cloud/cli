@@ -642,3 +642,36 @@ describe('fourteenth review round', () => {
     expect(result.stderr).not.toContain('hunter22');
   });
 });
+
+describe('fifteenth review round', () => {
+  it('does not echo a bare secret given as --env or -f', async () => {
+    const file = join(tempDir(), 'a.spec.ts');
+    writeFileSync(file, 'test("a", async () => {})');
+    const env = await cli(
+      () => ({ body: {} }),
+      ['scenarios', 'test', file, '--env', 'YWJjMTIzNDU2Nzg5=='],
+    );
+    expect(env.code).toBe(2);
+    expect(env.stderr).not.toContain('YWJj');
+    const field = await cli(
+      () => ({ body: {} }),
+      ['api', '/v1/servers/1', '-X', 'PATCH', '-f', '=hunter22-secret'],
+    );
+    expect(field.code).toBe(2);
+    expect(field.stderr).not.toContain('hunter22');
+  });
+
+  it('skips timeout and regions for DNS checks', () => {
+    const dns = {
+      id: 3,
+      protocol: 'dns',
+      request_timeout: 30,
+      locations: ['msk-1'],
+    } as never;
+    expect(
+      planServerPatch(dns, { timeout: 10, regions: ['nyc-1'] }),
+    ).toMatchObject({
+      body: {},
+    });
+  });
+});

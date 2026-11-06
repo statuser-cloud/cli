@@ -66,7 +66,8 @@ const ru = {
     'поле тела или query-параметр key=value (значение — JSON, если разбирается)',
   optRawField: 'поле key=value, значение всегда строка',
   optInput: 'тело запроса из файла, `-` — из stdin',
-  apiFieldInvalid: (raw: string) => `Ожидается key=value: ${raw}`,
+  argInvalid: (flag: string, position: number) =>
+    `${flag} №${position}: ожидается key=value (значение не показано)`,
   apiInputWithGet:
     'У GET нет тела: для --input укажите метод, например -X POST.',
   apiFieldsWithInput: 'Нельзя одновременно передавать поля и --input.',
@@ -405,8 +406,6 @@ const ru = {
     `в ${file} нет ни одного test(...) — такой сценарий ничего не проверял бы`,
   cfgIntervalBelowTimeout: 'не меньше таймаута',
   cfgEnvTooMany: (max: number) => `не больше ${max} переменных`,
-  envArgInvalid: (position: number) =>
-    `--env №${position}: ожидается KEY=VALUE (значение не показано)`,
   cfgEnvName: (name: string) =>
     `${name}: имя — ЗАГЛАВНЫМИ латинскими буквами и не из служебных`,
   cfgEnvValue: (name: string) => `${name}: значение больше 4 КБ`,
@@ -485,7 +484,8 @@ const en: Messages = {
     'body field or query parameter key=value (value parsed as JSON when possible)',
   optRawField: 'field key=value, value is always a string',
   optInput: 'request body from a file, `-` for stdin',
-  apiFieldInvalid: (raw) => `Expected key=value: ${raw}`,
+  argInvalid: (flag, position) =>
+    `${flag} #${position}: key=value expected (the value is not shown)`,
   apiInputWithGet: 'GET has no body: give --input a method, e.g. -X POST.',
   apiFieldsWithInput: 'Fields and --input cannot be combined.',
   apiMethodInvalid: (method) => `Unknown method: ${method}`,
@@ -809,8 +809,6 @@ const en: Messages = {
     `${file} has no test(...) call — such a scenario would check nothing`,
   cfgIntervalBelowTimeout: 'must not be less than the timeout',
   cfgEnvTooMany: (max) => `no more than ${max} variables`,
-  envArgInvalid: (position) =>
-    `--env #${position}: KEY=VALUE expected (the value is not shown)`,
   cfgEnvName: (name) => `${name}: the name must be UPPER_CASE and not reserved`,
   cfgEnvValue: (name) => `${name}: value larger than 4 KB`,
   cfgHostInternal:

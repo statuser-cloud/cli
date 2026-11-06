@@ -57,14 +57,16 @@ export function planServerPatch(
     set('interval', 'check_interval', change.interval);
   }
   if (change.timeout !== undefined) {
-    if (server.protocol === 'heartbeat') notApplicable.push('timeout');
-    else if (change.timeout !== server.request_timeout) {
+    if (server.protocol === 'heartbeat' || server.protocol === 'dns') {
+      notApplicable.push('timeout');
+    } else if (change.timeout !== server.request_timeout) {
       set('timeout', 'request_timeout', change.timeout);
     }
   }
   if (change.regions !== undefined) {
-    if (server.protocol === 'heartbeat') notApplicable.push('regions');
-    else if (server.protocol === 'scenario' && change.regions.length !== 1) {
+    if (server.protocol === 'heartbeat' || server.protocol === 'dns') {
+      notApplicable.push('regions');
+    } else if (server.protocol === 'scenario' && change.regions.length !== 1) {
       notApplicable.push('regions');
     } else if (!sameSet(change.regions, server.locations ?? [])) {
       set('regions', 'locations', change.regions);

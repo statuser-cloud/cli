@@ -30,8 +30,12 @@ const HTTP_LIKE: ManagedProtocol[] = ['http', 'keyword'];
 /** Readable settings the file manages, by protocol. */
 export function fieldsFor(protocol: ManagedProtocol): string[] {
   const fields = ['description', 'check_interval'];
-  if (protocol !== 'heartbeat')
-    fields.push('host', 'request_timeout', 'locations');
+  if (protocol !== 'heartbeat') fields.push('host');
+  // DNS is checked from the backend through fixed resolvers: the server's
+  // timeout and regions are stored but change nothing.
+  if (protocol !== 'heartbeat' && protocol !== 'dns') {
+    fields.push('request_timeout', 'locations');
+  }
   if (CONFIRM_DELAY.includes(protocol)) fields.push('incident_confirm_delay');
   if (LATENCY.includes(protocol)) {
     fields.push('is_latency_alert_enabled', 'latency_trigger_ms');
