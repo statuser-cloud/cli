@@ -76,7 +76,7 @@ export function registerIncidentsCommands(program: Command): void {
         },
       });
       if (globalOptions(command).json) {
-        printJson(list);
+        printJson(list.map(redactIncident));
         return;
       }
       if (!list.length) {
@@ -225,25 +225,49 @@ export function parseWhen(raw: string, now = Date.now()): string {
 
 /**
  * Response headers of the checked site are kept with the incident as they
- * came (cookies, tokens); output that goes to CI logs hides their values
- * the way `servers get` hides the server's own. `statuser api` shows them.
+ * came (cookies, tokens), and the replay command carries the server's own
+ * headers; the backend masks only some names there, and replays stored
+ * before that stay as they were. Output that goes to CI logs hides these
+ * values the way `servers get` does. `statuser api` shows them.
  */
 export function redactIncident(incident: Incident): Incident {
-  if (!incident.details) return incident;
   return {
     ...incident,
-    details: incident.details.map((detail) =>
-      detail.headers
-        ? {
-            ...detail,
-            headers: Object.fromEntries(
-              Object.entries(detail.headers).map(([key, value]) => [
-                key,
-                isSecretHeader(key) ? '***' : value,
-              ]),
-            ),
-          }
-        : detail,
-    ),
+    replay: incident.replay ? redactReplay(incident.replay) : incident.replay,
+    details:
+      incident.details &&
+      incident.details.map((detail) =>
+        detail.headers
+          ? {
+              ...detail,
+              headers: Object.fromEntries(
+                Object.entries(detail.headers).map(([key, value]) => [
+                  key,
+                  isSecretHeader(key) ? '***' : value,
+                ]),
+              ),
+            }
+          : detail,
+      ),
   };
+}
+
+// `-H` and its argument as the backend writes them: single-quoted with
+// `'\''` for a quote inside, or bare when the value needs no quoting.
+const REPLAY_HEADER = /-H ('(?:[^']|'\\'')*'|[^\s']+)/g;
+
+export function redactReplay(replay: string): string {
+  return replay.replace(REPLAY_HEADER, (whole, arg: string) => {
+    const header = arg.startsWith("'")
+      ? arg.slice(1, -1).replace(/'\\''/g, "'")
+      : arg;
+    const colon = header.indexOf(':');
+    if (colon < 0) return whole;
+    const key = header.slice(0, colon).trim();
+    const value = header.slice(colon + 1).trim();
+    if (!value || !isSecretHeader(key)) return whole;
+    // The scheme says what to substitute; the backend keeps it too.
+    const scheme = /^([A-Za-z][A-Za-z0-9-]*)\s+\S/.exec(value)?.[1];
+    return `-H '${key}: ${scheme ? `${scheme} ***` : '***'}'`;
+  });
 }

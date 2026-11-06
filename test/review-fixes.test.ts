@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { redactReplay } from '../src/commands/incidents.js';
 import { maskSecrets } from '../src/commands/scenarios.js';
 import { localizeError } from '../src/commander-i18n.js';
 import { loadScenarioConfig } from '../src/scenarios/config.js';
@@ -373,5 +374,48 @@ describe('fifth review round', () => {
     );
     expect(result.stdout).not.toContain('session=abc');
     expect(JSON.parse(result.stdout).details[0].headers.server).toBe('nginx');
+  });
+});
+
+describe('sixth review round', () => {
+  it('masks secret headers in the replay command', () => {
+    const replay =
+      "curl -X GET -H 'X-Auth:s3cr3t' -H Accept:text/html -H 'Authorization:Bearer abc' -H 'X-Note:it'\\''s' https://a.example.com/";
+    const masked = redactReplay(replay);
+    expect(masked).not.toContain('s3cr3t');
+    expect(masked).not.toContain('abc');
+    expect(masked).toContain("-H 'Authorization: Bearer ***'");
+    expect(masked).toContain('-H Accept:text/html');
+    expect(masked).toContain("-H 'X-Note:it'\\''s'");
+  });
+
+  it('reports a 5xx on apply as an unknown outcome', async () => {
+    const config = join(tempDir(), 'statuser.json');
+    writeFileSync(
+      config,
+      JSON.stringify({
+        project_id: 100000,
+        servers: [{ name: 'A', protocol: 'ping', host: '1.1.1.1' }],
+      }),
+    );
+    const result = await cli(
+      (r) => {
+        if (r.path === '/v1/billing/current-plan') return { body: plan };
+        if (r.method === 'GET') return { body: [] };
+        return { status: 500, body: { message: 'boom' } };
+      },
+      ['apply', '-c', config, '--json'],
+    );
+    expect(JSON.parse(result.stdout).error.outcome_unknown).toBe(true);
+  });
+
+  it('updates a heartbeat by id without repeating its name', () => {
+    expect(() =>
+      parseServersSection(
+        [{ id: 5, protocol: 'heartbeat', check_interval: 86400 }],
+        {},
+        fail,
+      ),
+    ).not.toThrow();
   });
 });

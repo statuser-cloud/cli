@@ -129,7 +129,9 @@ export function parseServersSection(
     if (name === null && entry.id === undefined) {
       return fail(`${at}: ${t.cfgNameOrId}`);
     }
-    if (protocol === 'heartbeat' && name === null) {
+    // A heartbeat is told apart by its name, so it cannot be cleared; an
+    // entry pinned by id may leave the name out and keep it.
+    if (protocol === 'heartbeat' && name === null && entry.name !== undefined) {
       return fail(`${at}.name: ${t.cfgHeartbeatName}`);
     }
 

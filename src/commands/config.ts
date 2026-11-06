@@ -332,7 +332,9 @@ async function execute(
           },
         };
       }
-      if (error instanceof StatuserApiError) {
+      // A 4xx is a refusal; after a 5xx the write may have been stored
+      // before the answer failed, so it is an unknown outcome like a drop.
+      if (error instanceof StatuserApiError && error.status < 500) {
         return {
           applied,
           failure: {
@@ -350,7 +352,11 @@ async function execute(
           name: write.name,
           message: t.applyUnknownOutcome(
             write.name,
-            error instanceof Error ? error.message : String(error),
+            error instanceof StatuserApiError
+              ? error.format()
+              : error instanceof Error
+                ? error.message
+                : String(error),
           ),
           exitCode: ExitCode.Failure,
           outcome_unknown: true,

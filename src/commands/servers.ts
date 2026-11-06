@@ -407,7 +407,11 @@ export async function bulkApply(
         break;
       }
       const message =
-        error instanceof StatuserApiError ? error.format() : String(error);
+        error instanceof StatuserApiError
+          ? error.format()
+          : error instanceof Error
+            ? error.message
+            : String(error);
       printErr(t.bulkFailed(server.id, message));
       result.failed.push({ id: server.id, message });
     }
