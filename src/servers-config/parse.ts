@@ -130,11 +130,6 @@ export function parseServersSection(
     if (name === null && entry.id === undefined) {
       return fail(`${at}: ${t.cfgNameOrId}`);
     }
-    // A heartbeat is told apart by its name, so it cannot be cleared; an
-    // entry pinned by id may leave the name out and keep it.
-    if (protocol === 'heartbeat' && name === null && entry.name !== undefined) {
-      return fail(`${at}.name: ${t.cfgHeartbeatName}`);
-    }
 
     const readable = new Set(fieldsFor(protocol));
     const secret = new Set(secretFieldsFor(protocol));
@@ -160,7 +155,11 @@ export function parseServersSection(
         if (key !== 'llm_api_key' && AUTH_CONTROL.test(resolved)) {
           return fail(`${at}.${key}: ${t.cfgControlChars}`);
         }
-        if (textLength(resolved) > SECRET_MAX[key]!) {
+        // HTTP credentials are measured in UTF-16 units (`resolveHttpAuth`),
+        // the LLM key by `@MaxLength`.
+        const length =
+          key === 'llm_api_key' ? textLength(resolved) : resolved.length;
+        if (length > SECRET_MAX[key]!) {
           return fail(`${at}.${key}: ${t.cfgMaxLength(SECRET_MAX[key]!)}`);
         }
         secrets[key] = resolved;
@@ -244,11 +243,13 @@ function checkField(
     const max = STRINGS[key];
     // The login goes to the API as written, and its length is checked
     // there untrimmed.
-    const length =
+    // The login is also checked trimmed and in UTF-16 units when the
+    // authorization is resolved (`resolveHttpAuth`).
+    const tooLong =
       key === 'http_auth_username'
-        ? textLength(value)
-        : textLength(value.trim());
-    return typeof max === 'number' && length > max ? t.cfgMaxLength(max) : null;
+        ? textLength(value) > max! || value.trim().length > max!
+        : textLength(value.trim()) > max!;
+    return typeof max === 'number' && tooLong ? t.cfgMaxLength(max) : null;
   }
   if (ENUMS[key]) {
     return ENUMS[key]!.includes(value as string)

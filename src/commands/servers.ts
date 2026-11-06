@@ -14,6 +14,7 @@ import {
 } from '../servers-update.js';
 import { isSecretHeader } from '../servers-config/fields.js';
 import { patchPlanProblem } from '../servers-config/plan.js';
+import { describeWriteFailure } from '../write-failure.js';
 
 export type Server = components['schemas']['ServerResponseDto'];
 type CurrentPlan = components['schemas']['CurrentPlanResponseDto'];
@@ -56,7 +57,11 @@ export function parseId(raw: string): number {
 interface BulkResult {
   done: number[];
   skipped: number[];
-  failed: Array<{ id: number; message: string }>;
+  /**
+   * `outcome_unknown`: the request may have been applied before the answer
+   * was lost (a drop, a timeout, a 5xx). `resume --from` returns those too.
+   */
+  failed: Array<{ id: number; message: string; outcome_unknown: boolean }>;
   /** Set when the key stopped working mid-way; the rest was not attempted. */
   aborted?: 'unauthorized';
 }
@@ -406,6 +411,7 @@ export async function bulkApply(
         result.aborted = 'unauthorized';
         break;
       }
+      const failure = describeWriteFailure(`#${server.id}`, error);
       const message =
         error instanceof StatuserApiError
           ? error.format()
@@ -413,7 +419,11 @@ export async function bulkApply(
             ? error.message
             : String(error);
       printErr(t.bulkFailed(server.id, message));
-      result.failed.push({ id: server.id, message });
+      result.failed.push({
+        id: server.id,
+        message,
+        outcome_unknown: failure.outcome_unknown,
+      });
     }
   }
   return result;
@@ -443,12 +453,23 @@ async function readPausedIds(path: string): Promise<number[]> {
   try {
     const parsed = JSON.parse(await readFile(path, 'utf8')) as {
       done?: unknown;
+      failed?: unknown;
     };
     if (
       Array.isArray(parsed.done) &&
       parsed.done.every((id) => Number.isInteger(id))
     ) {
-      return parsed.done as number[];
+      // A pause whose answer was lost may have been applied: it is resumed
+      // too, and a server that is not paused is skipped.
+      const uncertain = Array.isArray(parsed.failed)
+        ? parsed.failed
+            .filter(
+              (f: { id?: unknown; outcome_unknown?: unknown }) =>
+                f?.outcome_unknown === true && Number.isInteger(f.id),
+            )
+            .map((f: { id: number }) => f.id)
+        : [];
+      return [...(parsed.done as number[]), ...uncertain];
     }
   } catch {
     // Reported below with the file name.

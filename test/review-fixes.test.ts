@@ -533,3 +533,57 @@ describe('ninth review round', () => {
     expect(plan.steps[0]).toMatchObject({ kind: 'update', fields: ['name'] });
   });
 });
+
+describe('tenth review round', () => {
+  it('resumes a server whose pause answer was lost', async () => {
+    const paused = join(tempDir(), 'paused.json');
+    const first = await cli(
+      (r) =>
+        r.method === 'GET'
+          ? { body: [{ id: 1, status: 'online' }] }
+          : { status: 502, body: { message: 'bad gateway' } },
+      ['servers', 'pause', '1', '--json'],
+    );
+    writeFileSync(paused, first.stdout);
+    expect(JSON.parse(first.stdout).failed[0].outcome_unknown).toBe(true);
+    await server!.close();
+    server = undefined;
+    await cli(
+      (r) =>
+        r.method === 'GET'
+          ? { body: [{ id: 1, status: 'paused' }] }
+          : { body: {} },
+      ['servers', 'resume', '--from', paused],
+    );
+    expect(writes(server!)).toEqual(['PATCH /v1/servers/1/unpause']);
+  });
+
+  it('applies an own export of a heartbeat without a name', () => {
+    expect(() =>
+      parseServersSection(
+        [{ id: 5, name: null, protocol: 'heartbeat' }],
+        {},
+        fail,
+      ),
+    ).not.toThrow();
+  });
+
+  it('measures HTTP credentials in UTF-16 units like the API', () => {
+    expect(() =>
+      parseServersSection(
+        [
+          {
+            name: 'A',
+            protocol: 'http',
+            host: 'https://a.example.com',
+            http_auth_type: 'basic',
+            http_auth_username: 'u',
+            http_auth_password: '😀'.repeat(2049),
+          },
+        ],
+        {},
+        fail,
+      ),
+    ).toThrow(/http_auth_password/);
+  });
+});

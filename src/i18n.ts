@@ -388,7 +388,6 @@ const ru = {
   cfgMaxLength: (max: number) => `не длиннее ${max} символов`,
   cfgDuplicate: (name: string) => `повторяется «${name}»`,
   cfgNameOrId: 'нужно name или id',
-  cfgHeartbeatName: 'у heartbeat обязательно',
   cfgNotUsedBy: (protocol: string) => `не используется протоколом ${protocol}`,
   cfgProtocol: (list: string) =>
     `одно из: ${list} (сценарии — в секции scenarios)`,
@@ -790,7 +789,6 @@ const en: Messages = {
   cfgMaxLength: (max) => `at most ${max} characters`,
   cfgDuplicate: (name) => `duplicate “${name}”`,
   cfgNameOrId: 'name or id required',
-  cfgHeartbeatName: 'required for heartbeat',
   cfgNotUsedBy: (protocol) => `not used by protocol ${protocol}`,
   cfgProtocol: (list) =>
     `one of: ${list} (scenarios go to the scenarios section)`,
