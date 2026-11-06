@@ -5,6 +5,7 @@ import { CliError, ExitCode } from '../errors.js';
 import { writeOwnFile } from '../files.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
+import { isSecretHeader } from '../servers-config/fields.js';
 import {
   formatDuration,
   formatTime,
@@ -119,7 +120,7 @@ export function registerIncidentsCommands(program: Command): void {
         path: `/v1/incidents/${id}`,
       });
       if (globalOptions(command).json) {
-        printJson(incident);
+        printJson(redactIncident(incident));
         return;
       }
       const server = await client
@@ -220,4 +221,29 @@ export function parseWhen(raw: string, now = Date.now()): string {
     throw new CliError(t.whenInvalid(raw), ExitCode.Usage);
   }
   return new Date(date).toISOString();
+}
+
+/**
+ * Response headers of the checked site are kept with the incident as they
+ * came (cookies, tokens); output that goes to CI logs hides their values
+ * the way `servers get` hides the server's own. `statuser api` shows them.
+ */
+export function redactIncident(incident: Incident): Incident {
+  if (!incident.details) return incident;
+  return {
+    ...incident,
+    details: incident.details.map((detail) =>
+      detail.headers
+        ? {
+            ...detail,
+            headers: Object.fromEntries(
+              Object.entries(detail.headers).map(([key, value]) => [
+                key,
+                isSecretHeader(key) ? '***' : value,
+              ]),
+            ),
+          }
+        : detail,
+    ),
+  };
 }

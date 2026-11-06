@@ -130,11 +130,17 @@ export function isSecretHeader(name: string): boolean {
 export function duplicateKey(state: Record<string, unknown>): string {
   const protocol = state.protocol as string;
   const str = (field: string) => String(normalize(field, state[field]) ?? '');
-  if (protocol === 'heartbeat') return `heartbeat|${str('name')}`;
+  // JSON keeps the parts apart: with a plain separator `a|b` + `c` and
+  // `a` + `b|c` would collide.
+  if (protocol === 'heartbeat')
+    return JSON.stringify(['heartbeat', str('name')]);
   if (protocol === 'llm') {
-    return ['llm', str('host'), str('llm_provider'), str('llm_model')].join(
-      '|',
-    );
+    return JSON.stringify([
+      'llm',
+      str('host'),
+      str('llm_provider'),
+      str('llm_model'),
+    ]);
   }
   const parts = [protocol, str('host')];
   if (protocol === 'tcp') parts.push(str('port'));
@@ -142,5 +148,5 @@ export function duplicateKey(state: Record<string, unknown>): string {
     parts.push(str('http_method'), str('body'));
   }
   if (protocol === 'keyword') parts.push(str('keyword'), str('keyword_mode'));
-  return parts.join('|');
+  return JSON.stringify(parts);
 }

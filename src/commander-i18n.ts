@@ -10,7 +10,8 @@ const HEADINGS: Array<[RegExp, () => string]> = [
   [/^Global Options:/gm, () => t.helpGlobalOptions],
   [/^Options:/gm, () => t.helpOptions],
   [/^Commands:/gm, () => t.helpCommands],
-  [/\(default: /g, () => `(${t.helpDefault}: `],
+  // A wrapped line puts a newline after the colon, not a space.
+  [/\(default:(?=\s)/g, () => `(${t.helpDefault}:`],
 ];
 
 const ERRORS: Array<[RegExp, (...groups: string[]) => string]> = [

@@ -357,3 +357,21 @@ describe('third review round', () => {
     ]);
   });
 });
+
+describe('fifth review round', () => {
+  it('hides secret response headers in incidents get --json', async () => {
+    const result = await cli(
+      () => ({
+        body: {
+          id: 5,
+          details: [
+            { headers: { 'set-cookie': 'session=abc', server: 'nginx' } },
+          ],
+        },
+      }),
+      ['incidents', 'get', '5', '--json'],
+    );
+    expect(result.stdout).not.toContain('session=abc');
+    expect(JSON.parse(result.stdout).details[0].headers.server).toBe('nginx');
+  });
+});

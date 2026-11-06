@@ -571,4 +571,41 @@ describe('third review round', () => {
     const plan = buildServersPlan(desired, 100000, inProject, features);
     expect(plan.steps.map((s) => s.kind)).toEqual(['unchanged', 'unchanged']);
   });
+
+  it('keeps the name when the file has no name field', () => {
+    const desired = parse([{ id: 1, protocol: 'http', check_interval: 120 }]);
+    const plan = buildServersPlan(desired, 100000, [server()], features);
+    expect(plan.steps[0]).toMatchObject({
+      kind: 'update',
+      body: { check_interval: 120 },
+    });
+    expect(plan.steps[0]).not.toHaveProperty('body.name');
+  });
+
+  it('does not take values with the separator for a duplicate', () => {
+    const desired = parse([
+      {
+        name: 'A',
+        protocol: 'keyword',
+        host: 'https://a.example.com',
+        http_method: 'post',
+        body: 'a|b',
+        keyword: 'c',
+      },
+      {
+        name: 'B',
+        protocol: 'keyword',
+        host: 'https://a.example.com',
+        http_method: 'post',
+        body: 'a',
+        keyword: 'b|c',
+      },
+    ]);
+    expect(() =>
+      buildServersPlan(desired, 100000, [], {
+        ...(features as object),
+        keyword_monitoring_enabled: true,
+      } as never),
+    ).not.toThrow();
+  });
 });

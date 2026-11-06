@@ -13,6 +13,8 @@ export interface DesiredServer {
   at: string;
   id?: number;
   name: string | null;
+  /** `name` is in the file: null then clears the name, absence keeps it. */
+  nameGiven: boolean;
   protocol: ManagedProtocol;
   /** Readable settings present in the file, as written. */
   fields: Record<string, unknown>;
@@ -195,6 +197,7 @@ export function parseServersSection(
       at,
       id: entry.id as number | undefined,
       name,
+      nameGiven: entry.name !== undefined,
       protocol,
       fields,
       secrets,

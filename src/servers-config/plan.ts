@@ -132,8 +132,9 @@ function diffServer(entry: DesiredServer, server: Server): ServerStep {
   const current = server as unknown as Record<string, unknown>;
   const body: Record<string, unknown> = {};
   const fields: string[] = [];
-  // `name: null` on a pinned entry clears the name, as the API does.
-  if (entry.name !== server.name) {
+  // `name: null` on a pinned entry clears the name, as the API does; an
+  // entry without `name` leaves it alone.
+  if (entry.nameGiven && entry.name !== server.name) {
     body.name = entry.name;
     fields.push('name');
   }
