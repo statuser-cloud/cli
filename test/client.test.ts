@@ -1,3 +1,5 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { StatuserClient } from '../src/client.js';
 import { CliError, ExitCode, StatuserApiError } from '../src/errors.js';
@@ -56,6 +58,34 @@ describe('StatuserClient', () => {
       client.call({ method: 'GET', path: '/v1/servers' }),
     ).resolves.toEqual({ ok: true });
     expect(server.requests).toHaveLength(2);
+  });
+
+  it('retries when the connection was refused, the request not sent', async () => {
+    // Take a free port, release it, and start listening only after the
+    // first attempt has been refused.
+    const probe = createServer();
+    await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
+    const { port } = probe.address() as AddressInfo;
+    await new Promise((resolve) => probe.close(resolve));
+    let late: Server | undefined;
+    const timer = setTimeout(() => {
+      late = createServer((_req, res) => {
+        res.setHeader('content-type', 'application/json');
+        res.end('{"ok":true}');
+      }).listen(port, '127.0.0.1');
+    }, 300);
+    try {
+      const client = new StatuserClient({
+        apiUrl: `http://127.0.0.1:${port}`,
+        apiKey: 'k1',
+      });
+      await expect(
+        client.call({ method: 'POST', path: '/v1/servers', body: {} }),
+      ).resolves.toEqual({ ok: true });
+    } finally {
+      clearTimeout(timer);
+      await new Promise((resolve) => (late ? late.close(resolve) : resolve(0)));
+    }
   });
 
   it('rejects a key with whitespace before any request', async () => {

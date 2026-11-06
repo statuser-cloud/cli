@@ -11,6 +11,18 @@ const USER_AGENT = `statuser-cli/${CLI_VERSION}`;
 const MAX_429_RETRIES = 2;
 const MAX_429_WAIT_SECONDS = 30;
 const DEFAULT_TIMEOUT_MS = 60_000;
+const MAX_CONNECT_RETRIES = 2;
+const CONNECT_RETRY_DELAY_MS = 1_000;
+// The connection was never set up, so the request did not leave: repeating
+// it cannot apply a write twice. A reset or timeout after the request went
+// out is not here — the API may already have acted on it.
+const NOT_SENT_CODES = new Set([
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EAI_AGAIN',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -74,7 +86,9 @@ export class StatuserClient {
       headers['content-type'] = 'application/json';
     }
 
-    for (let attempt = 0; ; attempt += 1) {
+    let connectRetries = 0;
+    let rateLimitRetries = 0;
+    for (;;) {
       this.debug(`→ ${opts.method} ${redactUrl(url)}`);
       let res: Response;
       try {
@@ -87,13 +101,24 @@ export class StatuserClient {
           signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
         });
       } catch (error) {
-        throw new CliError(t.networkError(describeFetchError(error)));
+        const reason = describeFetchError(error);
+        if (
+          NOT_SENT_CODES.has(reason) &&
+          connectRetries < MAX_CONNECT_RETRIES
+        ) {
+          connectRetries += 1;
+          this.debug(`× ${reason}, retrying`);
+          await sleep(CONNECT_RETRY_DELAY_MS * connectRetries);
+          continue;
+        }
+        throw new CliError(t.networkError(reason));
       }
       this.debug(`← ${res.status}`);
 
-      if (res.status === 429 && attempt < MAX_429_RETRIES) {
+      if (res.status === 429 && rateLimitRetries < MAX_429_RETRIES) {
         const wait = parseRetryAfter(res.headers.get('retry-after'));
         if (wait !== null && wait <= MAX_429_WAIT_SECONDS) {
+          rateLimitRetries += 1;
           await res.body?.cancel();
           await sleep(wait * 1000);
           continue;
