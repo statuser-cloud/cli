@@ -42,6 +42,8 @@ export const SCENARIO_DEFAULT_INTERVAL = 300;
 export const SCENARIO_DEFAULT_LOCATION = 'msk-1';
 
 export const SCENARIO_SCRIPT_MAX_BYTES = 64 * 1024;
+// Same check as `assertScenarioScript` in the backend.
+export const SCENARIO_HAS_TEST = /\btest(?:\.\w+)?\s*\(/;
 const ENV_MAX_VARS = 20;
 const ENV_VALUE_MAX_BYTES = 4 * 1024;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,63}$/;
@@ -109,17 +111,22 @@ export async function loadScenarioConfig(
   try {
     raw = JSON.parse(text);
   } catch (error) {
-    return fail(`JSON: ${(error as Error).message}`);
+    return fail(t.cfgJson((error as Error).message));
   }
-  if (!isObject(raw)) return fail('expected an object');
+  if (!isObject(raw)) return fail(t.cfgObject);
   if (!isPositiveInt(raw.project_id)) {
-    return fail('project_id: positive integer required');
+    return fail(`project_id: ${t.cfgPositiveInt}`);
   }
-  if (raw.scenarios === undefined && !options.required) {
+  // Without `required`, a missing or empty section means "do not manage".
+  if (
+    !options.required &&
+    (raw.scenarios === undefined ||
+      (Array.isArray(raw.scenarios) && !raw.scenarios.length))
+  ) {
     return { projectId: raw.project_id as number, scenarios: [] };
   }
   if (!Array.isArray(raw.scenarios) || !raw.scenarios.length) {
-    return fail('scenarios: non-empty array required');
+    return fail(`scenarios: ${t.cfgNonEmptyArray}`);
   }
 
   const baseDir = dirname(resolve(path));
@@ -127,22 +134,22 @@ export async function loadScenarioConfig(
   const scenarios: DesiredScenario[] = [];
   for (const [index, item] of raw.scenarios.entries()) {
     const at = `scenarios[${index}]`;
-    if (!isObject(item)) return fail(`${at}: expected an object`);
+    if (!isObject(item)) return fail(`${at}: ${t.cfgObject}`);
 
     const name = typeof item.name === 'string' ? item.name.trim() : '';
-    if (!name) return fail(`${at}.name: required`);
-    if (names.has(name)) return fail(`${at}.name: duplicate “${name}”`);
+    if (!name) return fail(`${at}.name: ${t.cfgRequired}`);
+    if (names.has(name)) return fail(`${at}.name: ${t.cfgDuplicate(name)}`);
     names.add(name);
 
     if (item.id !== undefined && !isPositiveInt(item.id)) {
-      return fail(`${at}.id: positive integer`);
+      return fail(`${at}.id: ${t.cfgPositiveInt}`);
     }
     if (typeof item.file !== 'string' || !item.file) {
-      return fail(`${at}.file: required`);
+      return fail(`${at}.file: ${t.cfgRequired}`);
     }
     const timeout = item.timeout ?? SCENARIO_DEFAULT_TIMEOUT;
     if (!SCENARIO_TIMEOUTS.includes(timeout as never)) {
-      return fail(`${at}.timeout: one of ${SCENARIO_TIMEOUTS.join(', ')}`);
+      return fail(`${at}.timeout: ${t.cfgOneOf(SCENARIO_TIMEOUTS.join(', '))}`);
     }
     const interval = item.interval ?? SCENARIO_DEFAULT_INTERVAL;
     if (
@@ -151,15 +158,17 @@ export async function loadScenarioConfig(
       (interval as number) > SCENARIO_MAX_INTERVAL
     ) {
       return fail(
-        `${at}.interval: ${SCENARIO_MIN_INTERVAL}–${SCENARIO_MAX_INTERVAL} seconds`,
+        `${at}.interval: ${t.cfgRange(SCENARIO_MIN_INTERVAL, SCENARIO_MAX_INTERVAL)}`,
       );
     }
     if ((interval as number) < (timeout as number)) {
-      return fail(`${at}.interval: must not be less than timeout`);
+      return fail(`${at}.interval: ${t.cfgIntervalBelowTimeout}`);
     }
     const location = item.location ?? SCENARIO_DEFAULT_LOCATION;
     if (!SCENARIO_LOCATIONS.includes(location as never)) {
-      return fail(`${at}.location: one of ${SCENARIO_LOCATIONS.join(', ')}`);
+      return fail(
+        `${at}.location: ${t.cfgOneOf(SCENARIO_LOCATIONS.join(', '))}`,
+      );
     }
 
     const file = resolve(baseDir, item.file);
@@ -167,20 +176,25 @@ export async function loadScenarioConfig(
     try {
       script = await readFile(file, 'utf8');
     } catch {
-      return fail(`${at}.file: cannot read ${item.file}`);
+      return fail(`${at}.file: ${t.cfgCannotRead(item.file)}`);
     }
-    if (!script.trim()) return fail(`${at}.file: ${item.file} is empty`);
+    if (!script.trim()) return fail(`${at}.file: ${t.cfgFileEmpty(item.file)}`);
     if (Buffer.byteLength(script, 'utf8') > SCENARIO_SCRIPT_MAX_BYTES) {
-      return fail(`${at}.file: larger than 64 KB`);
+      return fail(`${at}.file: ${t.cfgFileTooLarge}`);
+    }
+    // The backend rejects a script without any test(): the runner would
+    // report zero tests and the monitor stay green checking nothing.
+    if (!SCENARIO_HAS_TEST.test(script)) {
+      return fail(`${at}.file: ${t.cfgNoTest(item.file)}`);
     }
 
     let resolvedEnv: Record<string, string> | undefined;
     if (item.env !== undefined) {
-      if (!isObject(item.env)) return fail(`${at}.env: expected an object`);
+      if (!isObject(item.env)) return fail(`${at}.env: ${t.cfgObject}`);
       resolvedEnv = {};
       for (const [key, value] of Object.entries(item.env)) {
         if (typeof value !== 'string') {
-          return fail(`${at}.env.${key}: string required`);
+          return fail(`${at}.env.${key}: ${t.cfgString}`);
         }
         resolvedEnv[key] = resolveEnvValue(value, name, env);
       }
@@ -210,7 +224,7 @@ export async function loadScenarioConfig(
 export function scenarioEnvProblem(env: Record<string, string>): string | null {
   const names = Object.keys(env);
   if (names.length > ENV_MAX_VARS) {
-    return `no more than ${ENV_MAX_VARS} variables`;
+    return t.cfgEnvTooMany(ENV_MAX_VARS);
   }
   for (const name of names) {
     if (
@@ -218,10 +232,10 @@ export function scenarioEnvProblem(env: Record<string, string>): string | null {
       ENV_RESERVED_NAMES.includes(name) ||
       ENV_RESERVED_PREFIXES.some((prefix) => name.startsWith(prefix))
     ) {
-      return `${name}: name must be UPPER_CASE and not reserved`;
+      return t.cfgEnvName(name);
     }
     if (Buffer.byteLength(env[name] as string, 'utf8') > ENV_VALUE_MAX_BYTES) {
-      return `${name}: value larger than 4 KB`;
+      return t.cfgEnvValue(name);
     }
   }
   return null;

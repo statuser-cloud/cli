@@ -103,3 +103,46 @@ export function planServerPatch(
   }
   return { body, fields, notApplicable };
 }
+
+const SCENARIO_TIMEOUTS = [15, 30, 45, 60, 120];
+const MAX_INTERVAL: Partial<Record<Protocol, number>> = {
+  heartbeat: 31_536_000,
+  scenario: 86_400,
+};
+
+/**
+ * Whether the server accepts the planned values, as the backend checks
+ * them for its protocol. All targets are checked before the first PATCH:
+ * a timeout valid for HTTP but not for a scenario would otherwise stop the
+ * batch half-way.
+ */
+export function bulkTargetProblem(
+  server: Server,
+  plan: PlannedPatch,
+): string | null {
+  const interval =
+    (plan.body.check_interval as number | undefined) ?? server.check_interval;
+  const timeout =
+    (plan.body.request_timeout as number | undefined) ?? server.request_timeout;
+  if ('check_interval' in plan.body) {
+    const max = MAX_INTERVAL[server.protocol] ?? 3600;
+    if (interval < 60 || interval > max) return `interval 60–${max}`;
+  }
+  if ('request_timeout' in plan.body) {
+    if (server.protocol === 'scenario') {
+      if (!SCENARIO_TIMEOUTS.includes(timeout)) {
+        return `timeout ${SCENARIO_TIMEOUTS.join('/')}`;
+      }
+    } else if (timeout < 1 || timeout > 60) {
+      return 'timeout 1–60';
+    }
+  }
+  if (
+    server.protocol === 'scenario' &&
+    ('check_interval' in plan.body || 'request_timeout' in plan.body) &&
+    interval < timeout
+  ) {
+    return 'interval ≥ timeout';
+  }
+  return null;
+}

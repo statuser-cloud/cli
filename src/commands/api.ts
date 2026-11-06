@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { readFile } from 'node:fs/promises';
 import type { HttpMethod, QueryValue } from '../client.js';
-import { authedClient } from '../context.js';
+import { authedClient, globalOptions } from '../context.js';
 import { CliError, ExitCode } from '../errors.js';
 import { t } from '../i18n.js';
 import { printJson, printLine } from '../output.js';
@@ -50,7 +50,17 @@ export function registerApiCommand(program: Command): void {
       let body: unknown;
       let query: Record<string, QueryValue> | undefined;
       if (opts.input) {
-        body = JSON.parse(await readInput(opts.input));
+        const text = await readInput(opts.input).catch(() => {
+          throw new CliError(t.configNotFound(opts.input!), ExitCode.Usage);
+        });
+        try {
+          body = JSON.parse(text);
+        } catch (error) {
+          throw new CliError(
+            t.configInvalid(opts.input, t.cfgJson((error as Error).message)),
+            ExitCode.Usage,
+          );
+        }
       } else if (hasFields && fieldsAsQuery) {
         query = Object.fromEntries(
           Object.entries(fields).map(([k, v]) => [
@@ -64,8 +74,11 @@ export function registerApiCommand(program: Command): void {
 
       const { client } = await authedClient(command);
       const result = await client.call<unknown>({ method, path, query, body });
-      if (result === null) return;
-      if (typeof result === 'string') printLine(result);
+      // With --json stdout is always one JSON value: text answers (CSV
+      // exports) become a JSON string, an empty one becomes null.
+      if (globalOptions(command).json) printJson(result);
+      else if (result === null) return;
+      else if (typeof result === 'string') printLine(result);
       else printJson(result);
     });
 }

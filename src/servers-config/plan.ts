@@ -177,7 +177,11 @@ function createStep(entry: DesiredServer, projectId: number): ServerStep {
   if (entry.protocol === 'llm' && !f.llm_provider) {
     fail(t.applyFieldRequired(entry.at, 'llm_provider'));
   }
-  if (f.http_auth_type === 'basic' && !entry.secrets.http_auth_password) {
+  // An empty Basic password is legal; only its absence is not.
+  if (
+    f.http_auth_type === 'basic' &&
+    entry.secrets.http_auth_password === undefined
+  ) {
     fail(t.applyFieldRequired(entry.at, 'http_auth_password'));
   }
   if (f.http_auth_type === 'bearer' && !entry.secrets.http_auth_token) {
@@ -201,7 +205,10 @@ function createStep(entry: DesiredServer, projectId: number): ServerStep {
       check_interval: 300,
       is_ssl_check: false,
       is_domain_check: false,
-      ...(isHttp && { http_method: 'head' }),
+      // HEAD has no body, so a keyword check needs GET to see the page.
+      ...(isHttp && {
+        http_method: entry.protocol === 'keyword' ? 'get' : 'head',
+      }),
       ...(entry.protocol === 'keyword' && { keyword_mode: 'present' }),
       ...f,
       ...entry.secrets,
@@ -228,6 +235,15 @@ function checkAuth(steps: ServerStep[], byId: Map<number, Server>): void {
     const type = (body.http_auth_type ??
       current?.http_auth_type ??
       'none') as string;
+    // A secret of the other type would be accepted and ignored.
+    if (body.http_auth_password !== undefined && type !== 'basic') {
+      fail(
+        t.applyAuthSecretMismatch(step.entry.at, 'http_auth_password', type),
+      );
+    }
+    if (body.http_auth_token !== undefined && type !== 'bearer') {
+      fail(t.applyAuthSecretMismatch(step.entry.at, 'http_auth_token', type));
+    }
     if (type === 'none') continue;
     const username = body.http_auth_username ?? current?.http_auth_username;
     if (type === 'basic' && !username) {
@@ -235,7 +251,7 @@ function checkAuth(steps: ServerStep[], byId: Map<number, Server>): void {
     }
     const typeChanged = !current || current.http_auth_type !== type;
     const secret = type === 'basic' ? 'http_auth_password' : 'http_auth_token';
-    if (typeChanged && !body[secret]) {
+    if (typeChanged && body[secret] === undefined) {
       fail(t.applyFieldRequired(step.entry.at, secret));
     }
     const headers = (body.headers ?? current?.headers ?? []) as Array<{
@@ -291,28 +307,67 @@ function checkDuplicates(steps: ServerStep[], account: Server[]): void {
   }
 }
 
-// What a write needs from the plan, as `validateServerFeatures` checks it.
-function requiredFeatures(step: ServerStep): Array<keyof PlanFeatures> {
-  if (step.kind === 'unchanged') return [];
+// Fields whose presence in a PATCH makes the backend re-check the plan
+// (`ServerWriteService.update` → `validateServerFeatures`).
+const FEATURE_TRIGGERS = [
+  'check_interval',
+  'locations',
+  'is_ssl_check',
+  'is_domain_check',
+  'is_blocklist_check',
+  'is_latency_alert_enabled',
+  'latency_trigger_ms',
+  'incident_confirm_delay',
+  'llm_api_key',
+  'success_http_codes',
+];
+
+interface Requirements {
+  features: Array<keyof PlanFeatures>;
+  interval?: number;
+  locations?: string[];
+}
+
+/**
+ * What a write needs from the plan, as the backend checks it: on create
+ * the new server, on update the server as it will be after the PATCH —
+ * so a server kept from a richer plan fails as soon as it is touched.
+ */
+function requirements(step: ServerStep, current?: Server): Requirements {
+  if (step.kind === 'unchanged') return { features: [] };
   const body = step.body;
-  const needs: Array<keyof PlanFeatures> = [];
-  if (step.kind === 'create') {
-    const byProtocol: Partial<Record<string, keyof PlanFeatures>> = {
-      keyword: 'keyword_monitoring_enabled',
-      dns: 'dns_monitoring_enabled',
-      heartbeat: 'heartbeat_monitoring_enabled',
-      llm: 'ai_monitoring_enabled',
-    };
-    const feature = byProtocol[step.entry.protocol];
-    if (feature) needs.push(feature);
+  if (
+    step.kind === 'update' &&
+    !FEATURE_TRIGGERS.some((field) => field in body)
+  ) {
+    return { features: [] };
   }
-  if (body.llm_api_key) needs.push('ai_inference_enabled');
-  if (body.is_ssl_check === true) needs.push('ssl_monitoring_enabled');
-  if (body.is_domain_check === true) needs.push('domain_monitoring_enabled');
+  const merged = {
+    ...(current as unknown as Record<string, unknown>),
+    ...body,
+  };
+  const needs: Array<keyof PlanFeatures> = [];
+  const byProtocol: Partial<Record<string, keyof PlanFeatures>> = {
+    keyword: 'keyword_monitoring_enabled',
+    dns: 'dns_monitoring_enabled',
+    heartbeat: 'heartbeat_monitoring_enabled',
+    llm: 'ai_monitoring_enabled',
+  };
+  const protocolFeature = byProtocol[merged.protocol as string];
+  if (protocolFeature) needs.push(protocolFeature);
+  const inference =
+    body.llm_api_key !== undefined
+      ? Boolean(body.llm_api_key)
+      : current?.llm_check_mode === 'inference';
+  if (merged.protocol === 'llm' && inference)
+    needs.push('ai_inference_enabled');
+  if (merged.is_ssl_check === true) needs.push('ssl_monitoring_enabled');
+  if (merged.is_domain_check === true) needs.push('domain_monitoring_enabled');
+  // The backend reads only the sent value here: old rows have it on.
   if (body.is_blocklist_check === true) {
     needs.push('blocklist_monitoring_enabled');
   }
-  if (body.is_latency_alert_enabled === true) {
+  if (merged.is_latency_alert_enabled === true) {
     needs.push('latency_alerts_enabled');
   }
   if (
@@ -325,7 +380,11 @@ function requiredFeatures(step: ServerStep): Array<keyof PlanFeatures> {
   if (Array.isArray(codes) && !(codes.length === 1 && codes[0] === '2xx')) {
     needs.push('custom_success_http_codes_enabled');
   }
-  return needs;
+  return {
+    features: needs,
+    interval: merged.check_interval as number | undefined,
+    locations: merged.locations as string[] | undefined,
+  };
 }
 
 function checkPlan(
@@ -334,6 +393,7 @@ function checkPlan(
   features: PlanFeatures,
   plannedScenarioCreates: number,
 ): void {
+  const byId = new Map(account.map((s) => [s.id, s]));
   const creates = steps.filter((s) => s.kind === 'create').length;
   // An account already over the limit after a downgrade may still edit
   // its servers; only new ones are refused.
@@ -351,15 +411,17 @@ function checkPlan(
   }
   for (const step of steps) {
     if (step.kind === 'unchanged') continue;
-    for (const feature of requiredFeatures(step)) {
+    const current =
+      step.kind === 'update' ? byId.get(step.serverId) : undefined;
+    const needed = requirements(step, current);
+    for (const feature of needed.features) {
       if (!features[feature]) {
         fail(t.applyFeatureUnavailable(step.entry.at, feature));
       }
     }
-    const interval = step.body.check_interval;
     if (
-      typeof interval === 'number' &&
-      interval < features.min_check_interval_seconds
+      needed.interval !== undefined &&
+      needed.interval < features.min_check_interval_seconds
     ) {
       fail(
         t.applyIntervalTooLow(
@@ -368,16 +430,11 @@ function checkPlan(
         ),
       );
     }
-    const locations = step.body.locations;
-    if (Array.isArray(locations)) {
-      const unavailable = locations.filter(
-        (l) => !features.available_locations.includes(l),
-      );
-      if (unavailable.length) {
-        fail(
-          t.applyLocationsUnavailable(step.entry.at, unavailable.join(', ')),
-        );
-      }
+    const unavailable = (needed.locations ?? []).filter(
+      (l) => !features.available_locations.includes(l),
+    );
+    if (unavailable.length) {
+      fail(t.applyLocationsUnavailable(step.entry.at, unavailable.join(', ')));
     }
   }
 }

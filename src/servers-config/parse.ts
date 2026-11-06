@@ -1,3 +1,4 @@
+import { t } from '../i18n.js';
 import { resolveEnvValue } from '../scenarios/config.js';
 import {
   fieldsFor,
@@ -38,16 +39,15 @@ const ENUMS: Record<string, string[]> = {
 };
 // API bounds (`create-server.dto.ts`); checked here so a value the API
 // rejects never stops apply after earlier writes.
+const YEAR = 31_536_000;
 const RANGES: Record<string, [number, number]> = {
   check_interval: [60, 3600],
   request_timeout: [1, 60],
   incident_confirm_delay: [0, 3600],
   latency_trigger_ms: [50, 60_000],
-  heartbeat_grace_interval: [0, 3600],
+  heartbeat_grace_interval: [0, YEAR],
   port: [1, 65_535],
 };
-// Heartbeat jobs may run once a year.
-const HEARTBEAT_MAX_INTERVAL = 31_536_000;
 const BOOLEANS = [
   'is_latency_alert_enabled',
   'is_ssl_check',
@@ -55,57 +55,73 @@ const BOOLEANS = [
   'is_blocklist_check',
   'is_follow_redirects',
 ];
-const STRINGS = [
-  'host',
-  'description',
-  'body',
-  'keyword',
-  'http_auth_username',
-  'llm_model',
-];
+// String fields and their `MaxLength`; `null` — no limit.
+const STRINGS: Record<string, number | null> = {
+  host: 300,
+  description: 500,
+  body: null,
+  keyword: 256,
+  http_auth_username: 256,
+  llm_model: 128,
+};
+const SECRET_MAX: Record<string, number> = {
+  http_auth_password: 4096,
+  http_auth_token: 4096,
+  llm_api_key: 512,
+};
+const NAME_MAX = 150;
+// What `sanitizeHeaders` keeps: an RFC 7230 token as the name and no
+// control characters in the value. Anything else the backend drops silently,
+// so a file with it would wipe the server's headers on apply.
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9a-zA-Z-]+$/;
+// eslint-disable-next-line no-control-regex
+const HEADER_CONTROL = /[\x00-\x08\x0a-\x1f\x7f]/;
 
 /**
  * Validates the `servers` section. Everything that can be checked without
  * the API is checked here, before the first write: unknown or misplaced
- * fields, types, enums, empty location lists, missing `$VAR`s.
+ * fields, types, ranges, lengths, header names, missing `$VAR`s.
  */
 export function parseServersSection(
   raw: unknown,
   env: NodeJS.ProcessEnv,
   fail: (problem: string) => never,
 ): DesiredServer[] {
-  if (!Array.isArray(raw)) return fail('servers: array expected');
+  if (!Array.isArray(raw)) return fail(`servers: ${t.cfgArray}`);
   const result: DesiredServer[] = [];
   for (const [index, item] of raw.entries()) {
     const at = `servers[${index}]`;
     if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-      return fail(`${at}: object expected`);
+      return fail(`${at}: ${t.cfgObject}`);
     }
     const entry = item as Record<string, unknown>;
     const protocol = entry.protocol as ManagedProtocol;
     if (!MANAGED_PROTOCOLS.includes(protocol)) {
       return fail(
-        `${at}.protocol: one of ${MANAGED_PROTOCOLS.join(', ')} (scenarios go to the scenarios section)`,
+        `${at}.protocol: ${t.cfgProtocol(MANAGED_PROTOCOLS.join(', '))}`,
       );
     }
     if (
       entry.id !== undefined &&
       (!Number.isInteger(entry.id) || (entry.id as number) <= 0)
     ) {
-      return fail(`${at}.id: positive integer`);
+      return fail(`${at}.id: ${t.cfgPositiveInt}`);
     }
     const name =
       typeof entry.name === 'string' && entry.name.trim()
         ? entry.name.trim()
         : null;
     if (entry.name !== undefined && entry.name !== null && name === null) {
-      return fail(`${at}.name: non-empty string or null`);
+      return fail(`${at}.name: ${t.cfgNonEmptyString}`);
+    }
+    if (name !== null && name.length > NAME_MAX) {
+      return fail(`${at}.name: ${t.cfgMaxLength(NAME_MAX)}`);
     }
     if (name === null && entry.id === undefined) {
-      return fail(`${at}: name or id required`);
+      return fail(`${at}: ${t.cfgNameOrId}`);
     }
     if (protocol === 'heartbeat' && name === null) {
-      return fail(`${at}.name: required for heartbeat`);
+      return fail(`${at}.name: ${t.cfgHeartbeatName}`);
     }
 
     const readable = new Set(fieldsFor(protocol));
@@ -115,24 +131,44 @@ export function parseServersSection(
     for (const [key, value] of Object.entries(entry)) {
       if (key === 'id' || key === 'name' || key === 'protocol') continue;
       if (secret.has(key)) {
-        if (typeof value !== 'string' || !value) {
-          return fail(`${at}.${key}: string expected`);
+        // An empty Basic password is legal; tokens and keys are not.
+        if (
+          typeof value !== 'string' ||
+          (!value && key !== 'http_auth_password')
+        ) {
+          return fail(`${at}.${key}: ${t.cfgString}`);
         }
-        secrets[key] = resolveEnvValue(value, `${at}.${key}`, env);
+        const resolved = resolveEnvValue(value, `${at}.${key}`, env);
+        if (resolved.length > SECRET_MAX[key]!) {
+          return fail(`${at}.${key}: ${t.cfgMaxLength(SECRET_MAX[key]!)}`);
+        }
+        secrets[key] = resolved;
         continue;
       }
       if (!readable.has(key)) {
-        return fail(`${at}.${key}: not used by protocol ${protocol}`);
+        return fail(`${at}.${key}: ${t.cfgNotUsedBy(protocol)}`);
       }
       const problem = checkField(key, value, protocol);
       if (problem) return fail(`${at}.${key}: ${problem}`);
-      fields[key] =
-        key === 'headers'
-          ? (value as Array<{ key: string; value: string }>).map((h) => ({
-              key: h.key,
-              value: resolveEnvValue(h.value, `${at}.headers`, env),
-            }))
-          : value;
+      if (key === 'headers') {
+        const headers = (value as Array<{ key: string; value: string }>).map(
+          (h) => ({
+            key: h.key.trim(),
+            value: resolveEnvValue(h.value, `${at}.headers`, env).trim(),
+          }),
+        );
+        for (const header of headers) {
+          if (!HEADER_NAME.test(header.key)) {
+            return fail(`${at}.headers: ${t.cfgHeaderName(header.key)}`);
+          }
+          if (HEADER_CONTROL.test(header.value)) {
+            return fail(`${at}.headers: ${t.cfgHeaderValue(header.key)}`);
+          }
+        }
+        fields.headers = headers;
+        continue;
+      }
+      fields[key] = value;
     }
     result.push({
       at,
@@ -154,25 +190,27 @@ function checkField(
   const range = RANGES[key];
   if (range) {
     const max =
-      key === 'check_interval' && protocol === 'heartbeat'
-        ? HEARTBEAT_MAX_INTERVAL
-        : range[1];
+      key === 'check_interval' && protocol === 'heartbeat' ? YEAR : range[1];
     return Number.isInteger(value) &&
       (value as number) >= range[0] &&
       (value as number) <= max
       ? null
-      : `whole number ${range[0]}–${max}`;
+      : t.cfgRange(range[0], max);
   }
   if (BOOLEANS.includes(key)) {
-    return typeof value === 'boolean' ? null : 'true or false expected';
+    return typeof value === 'boolean' ? null : t.cfgBoolean;
   }
-  if (STRINGS.includes(key)) {
-    return typeof value === 'string' ? null : 'string expected';
+  if (key in STRINGS) {
+    if (typeof value !== 'string') return t.cfgString;
+    const max = STRINGS[key];
+    return typeof max === 'number' && value.trim().length > max
+      ? t.cfgMaxLength(max)
+      : null;
   }
   if (ENUMS[key]) {
     return ENUMS[key]!.includes(value as string)
       ? null
-      : `one of ${ENUMS[key]!.join(', ')}`;
+      : t.cfgOneOf(ENUMS[key]!.join(', '));
   }
   if (key === 'locations') {
     // An empty list leaves the server without agents: it would never be checked.
@@ -180,19 +218,19 @@ function checkField(
       value.length > 0 &&
       value.every((v) => LOCATIONS.includes(v))
       ? null
-      : `non-empty list of ${LOCATIONS.join(', ')}`;
+      : t.cfgListOf(LOCATIONS.join(', '));
   }
   if (key === 'dns_record_types') {
     return Array.isArray(value) &&
       value.length > 0 &&
       value.every((v) => DNS_TYPES.includes(v))
       ? null
-      : `non-empty list of ${DNS_TYPES.join(', ')}`;
+      : t.cfgListOf(DNS_TYPES.join(', '));
   }
   if (key === 'success_http_codes') {
     return Array.isArray(value) && value.every((v) => typeof v === 'string')
       ? null
-      : 'list of strings expected';
+      : t.cfgStrings;
   }
   if (key === 'headers') {
     return Array.isArray(value) &&
@@ -204,7 +242,7 @@ function checkField(
           typeof h.value === 'string',
       )
       ? null
-      : 'list of { "key", "value" } expected';
+      : t.cfgHeaders;
   }
   return null;
 }

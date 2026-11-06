@@ -12,6 +12,8 @@ type Maintenance =
   components['schemas']['StatusPagePlannedMaintenanceResponseDto'];
 
 const DEFAULT_WINDOW = '30m';
+// `MaxLength` of an update message in the API.
+const MESSAGE_MAX_LENGTH = 65_535;
 
 interface StartOptions {
   page: number;
@@ -84,6 +86,17 @@ export function registerMaintenanceCommands(program: Command): void {
     .requiredOption('--page <id>', t.optPage, parseId)
     .option('--message <text>', t.optMessage)
     .action(async (id: number, opts: EndOptions, command: Command) => {
+      // Checked before the window is closed: a message the API rejects after
+      // the PATCH would leave the window closed without its announcement.
+      if (opts.message !== undefined) {
+        const text = opts.message.trim();
+        if (!text || text.length > MESSAGE_MAX_LENGTH) {
+          throw new CliError(
+            t.messageInvalid(MESSAGE_MAX_LENGTH),
+            ExitCode.Usage,
+          );
+        }
+      }
       const { client } = await authedClient(command);
       const base = `/v1/status-pages/${opts.page}/planned-maintenances`;
       const list = await client.call<Maintenance[]>({
@@ -124,7 +137,12 @@ export function registerMaintenanceCommands(program: Command): void {
         } catch (error) {
           const message =
             error instanceof StatuserApiError ? error.format() : String(error);
-          throw new CliError(t.maintenanceMessageFailed(message));
+          throw new CliError(
+            t.maintenanceMessageFailed(message),
+            error instanceof StatuserApiError
+              ? error.exitCode
+              : ExitCode.Failure,
+          );
         }
       }
 

@@ -11,18 +11,20 @@ import { registerMaintenanceCommands } from './commands/maintenance.js';
 import { registerScenariosCommands } from './commands/scenarios.js';
 import { registerServersCommands } from './commands/servers.js';
 import { CliError, ExitCode, StatuserApiError } from './errors.js';
+import { localizeCommander } from './commander-i18n.js';
 import { t } from './i18n.js';
 import { printErr } from './output.js';
 
 const program = new Command()
   .name('statuser')
   .description(t.programDescription)
-  .version(CLI_VERSION)
+  .version(CLI_VERSION, '-V, --version', t.versionOption)
   .option('--json', t.optJson)
   .option('--api-url <url>', t.optApiUrl)
   .option('--debug', t.optDebug)
   .showHelpAfterError()
   .exitOverride();
+localizeCommander(program);
 
 registerAuthCommands(program);
 registerApiCommand(program);

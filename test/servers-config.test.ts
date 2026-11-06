@@ -385,7 +385,7 @@ describe('buildServersPlan after review', () => {
     const step = plan.steps[0]!;
     if (step.kind !== 'create') throw new Error('expected create');
     expect(step.body).toMatchObject({
-      http_method: 'head',
+      http_method: 'get',
       keyword_mode: 'present',
     });
   });

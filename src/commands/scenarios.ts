@@ -15,9 +15,11 @@ import {
   SCENARIO_TIMEOUTS,
 } from '../scenarios/config.js';
 import { buildDeployPlan, type PlanStep } from '../scenarios/plan.js';
+import { checkScenarioLimits } from '../servers-config/plan.js';
 import { listServers } from './servers.js';
 
 type ScenarioPreviewBody = components['schemas']['ScenarioPreviewDto'];
+type CurrentPlan = components['schemas']['CurrentPlanResponseDto'];
 type ScenarioRunResponse = components['schemas']['ScenarioRunResponseDto'];
 type ScenarioRunStatus = ScenarioRunResponse['status'];
 
@@ -97,8 +99,11 @@ export function registerScenariosCommands(program: Command): void {
         timeoutMs: timeout * 1000 + PREVIEW_OVERHEAD_MS,
       });
 
-      if (json) printJson(result);
-      else printRunResult(result);
+      // The test may print or compare its passwords; the run result comes
+      // back verbatim, so the values passed here are masked before output.
+      const masked = maskSecrets(result, Object.values(env));
+      if (json) printJson(masked);
+      else printRunResult(masked);
       process.exitCode = runExitCode(result.status);
     });
 
@@ -112,8 +117,34 @@ export function registerScenariosCommands(program: Command): void {
         const config = await loadScenarioConfig(opts.config);
         const { client } = await authedClient(command);
         // The whole account: duplicate scripts are checked account-wide.
-        const servers = await listServers(client);
+        const [servers, current] = await Promise.all([
+          listServers(client),
+          client.call<CurrentPlan>({
+            method: 'GET',
+            path: '/v1/billing/current-plan',
+          }),
+        ]);
         const plan = buildDeployPlan(config, servers);
+        // Plan limits before the first write, as `apply` does.
+        const creates = plan.steps.filter((s) => s.kind === 'create').length;
+        checkScenarioLimits(
+          plan.steps,
+          servers.filter((s) => s.protocol === 'scenario').length,
+          current.features,
+        );
+        if (
+          creates &&
+          servers.length + creates > current.features.servers_limit
+        ) {
+          throw new CliError(
+            t.applyServersLimit(
+              current.features.servers_limit,
+              servers.length,
+              creates,
+            ),
+            ExitCode.Usage,
+          );
+        }
         const json = globalOptions(command).json;
 
         const pending = plan.steps.filter((s) => s.kind !== 'unchanged');
@@ -231,4 +262,25 @@ function runExitCode(status: ScenarioRunStatus): number {
   if (status === 'passed') return ExitCode.Ok;
   if (status === 'runner_error') return ExitCode.Failure;
   return ExitCode.ScenarioFailed;
+}
+
+// Values shorter than this would mask ordinary words of the output.
+const MIN_MASKED_LENGTH = 4;
+
+export function maskSecrets<T>(value: T, secrets: string[]): T {
+  const masked = secrets.filter((s) => s.length >= MIN_MASKED_LENGTH);
+  if (!masked.length) return value;
+  const replace = (text: string) =>
+    masked.reduce((acc, secret) => acc.split(secret).join('***'), text);
+  const walk = (node: unknown): unknown => {
+    if (typeof node === 'string') return replace(node);
+    if (Array.isArray(node)) return node.map(walk);
+    if (node && typeof node === 'object') {
+      return Object.fromEntries(
+        Object.entries(node).map(([key, item]) => [key, walk(item)]),
+      );
+    }
+    return node;
+  };
+  return walk(value) as T;
 }

@@ -140,6 +140,19 @@ describe('maintenance end', { timeout: 30_000 }, () => {
   });
 });
 
+const currentPlan = {
+  features: {
+    servers_limit: 50,
+    scenarios_limit: 10,
+    scenario_min_check_interval_seconds: 60,
+    scenario_max_timeout_seconds: 120,
+  },
+};
+const withPlan =
+  (handler: Handler): Handler =>
+  (r) =>
+    r.path === '/v1/billing/current-plan' ? { body: currentPlan } : handler(r);
+
 describe('scenarios deploy', { timeout: 30_000 }, () => {
   function project() {
     const dir = tempDir();
@@ -162,7 +175,7 @@ describe('scenarios deploy', { timeout: 30_000 }, () => {
 
   it('changes nothing on --dry-run', async () => {
     const result = await cli(
-      () => ({ body: [] }),
+      withPlan(() => ({ body: [] })),
       ['scenarios', 'deploy', '-c', project(), '--dry-run'],
     );
     expect(result.code).toBe(0);
@@ -172,10 +185,11 @@ describe('scenarios deploy', { timeout: 30_000 }, () => {
 
   it('stops at the first failed write', async () => {
     const result = await cli(
-      (r) =>
+      withPlan((r) =>
         r.method === 'GET'
           ? { body: [] }
           : { status: 400, body: { message: 'bad', error_code: 'x' } },
+      ),
       ['scenarios', 'deploy', '-c', project()],
     );
     expect(result.code).toBe(1);

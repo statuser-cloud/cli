@@ -44,8 +44,10 @@ export function registerAuthCommands(program: Command): void {
   program
     .command('logout')
     .description(t.cmdLogout)
-    .action(async () => {
-      printLine((await removeConfig()) ? t.logoutDone : t.logoutNothing);
+    .action(async (_opts: unknown, command: Command) => {
+      const removed = await removeConfig();
+      if (globalOptions(command).json) printJson({ removed });
+      else printLine(removed ? t.logoutDone : t.logoutNothing);
     });
 
   program

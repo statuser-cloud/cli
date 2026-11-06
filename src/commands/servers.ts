@@ -7,7 +7,12 @@ import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
 import { printErr, printJson, printLine, printTable } from '../output.js';
 import { SCENARIO_LOCATIONS } from '../scenarios/config.js';
-import { planServerPatch, type BulkChange } from '../servers-update.js';
+import {
+  bulkTargetProblem,
+  planServerPatch,
+  type BulkChange,
+} from '../servers-update.js';
+import { isSecretHeader } from '../servers-config/fields.js';
 
 export type Server = components['schemas']['ServerResponseDto'];
 
@@ -21,6 +26,21 @@ export async function listServers(
     path: '/v1/servers',
     query: { project_id: projectId },
   });
+}
+
+/**
+ * The heartbeat token and secret header values are live credentials: a
+ * `servers get` in a CI log would hand them to anyone reading it. They stay
+ * reachable through `statuser api` for whoever needs them on purpose.
+ */
+export function redactServer(server: Server): Server {
+  return {
+    ...server,
+    heartbeat_token: server.heartbeat_token ? '***' : server.heartbeat_token,
+    headers: (server.headers ?? []).map((header) =>
+      isSecretHeader(header.key) ? { ...header, value: '***' } : header,
+    ),
+  };
 }
 
 export function parseId(raw: string): number {
@@ -58,7 +78,7 @@ export function registerServersCommands(program: Command): void {
           list = list.filter((server) => server.protocol === opts.protocol);
         }
         if (globalOptions(command).json) {
-          printJson(list);
+          printJson(list.map(redactServer));
           return;
         }
         if (!list.length) {
@@ -93,7 +113,12 @@ export function registerServersCommands(program: Command): void {
     .action(async (id: number, _opts: unknown, command: Command) => {
       const { client } = await authedClient(command);
       printJson(
-        await client.call<Server>({ method: 'GET', path: `/v1/servers/${id}` }),
+        redactServer(
+          await client.call<Server>({
+            method: 'GET',
+            path: `/v1/servers/${id}`,
+          }),
+        ),
       );
     });
 
@@ -178,6 +203,15 @@ export function registerServersCommands(program: Command): void {
       const plans = new Map(
         targets.map((server) => [server.id, planServerPatch(server, change)]),
       );
+      for (const server of targets) {
+        const problem = bulkTargetProblem(server, plans.get(server.id)!);
+        if (problem) {
+          throw new CliError(
+            t.updateValueInvalid(server.id, problem),
+            ExitCode.Usage,
+          );
+        }
+      }
       const json = globalOptions(command).json;
       if (opts.dryRun) {
         const planned = targets.map((server) => {

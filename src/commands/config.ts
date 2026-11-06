@@ -2,7 +2,12 @@ import type { Command } from 'commander';
 import { readFile } from 'node:fs/promises';
 import type { StatuserClient } from '../client.js';
 import { authedClient, globalOptions } from '../context.js';
-import { CliError, ExitCode, StatuserApiError } from '../errors.js';
+import {
+  CliError,
+  ExitCode,
+  StatuserApiError,
+  type ExitCodeValue,
+} from '../errors.js';
 import { writeOwnFile } from '../files.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
@@ -50,7 +55,21 @@ export function registerConfigCommands(program: Command): void {
         if (opts.output && opts.force) {
           // Re-exporting into an existing file keeps its scenarios section:
           // those entries point at local test files the export cannot know.
-          const existing = await readJson(opts.output).catch(() => null);
+          // Only a missing file is "nothing to keep"; a broken or unreadable
+          // one stops the export before it overwrites the scenarios inside.
+          const existing = await readJson(opts.output).catch(
+            (error: unknown) => {
+              if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                return null;
+              }
+              throw error instanceof CliError
+                ? error
+                : new CliError(
+                    t.configInvalid(opts.output!, String(error)),
+                    ExitCode.Usage,
+                  );
+            },
+          );
           // Scenarios of another project must not move into this one.
           if (
             existing &&
@@ -112,9 +131,18 @@ export function registerConfigCommands(program: Command): void {
       const plan = await buildFullPlan(client, opts.config);
       const json = globalOptions(command).json;
       if (!json) printPlan(plan);
-      const applied = await execute(client, plan, !!json);
-      if (json) printJson(summarize(plan, false, applied));
-      else if (!applied.length) printLine(t.deployNothing);
+      const { applied, failure } = await execute(client, plan, !!json);
+      // With --json the run always ends with one JSON document, including
+      // what was applied before a failure.
+      if (json) {
+        printJson({
+          ...summarize(plan, false, applied),
+          error: failure ?? null,
+        });
+      } else if (!applied.length && !failure) {
+        printLine(t.deployNothing);
+      }
+      if (failure) throw new CliError(failure.message, failure.exitCode);
     });
 }
 
@@ -207,11 +235,18 @@ type Applied = { name: string; action: string; id: number };
  * run; what was applied before it stays, and a repeated run continues from
  * there. A dropped connection leaves the outcome of that step unknown.
  */
+interface Failure {
+  name: string;
+  message: string;
+  exitCode: ExitCodeValue;
+  outcome_unknown: boolean;
+}
+
 async function execute(
   client: StatuserClient,
   plan: FullPlan,
   quiet: boolean,
-): Promise<Applied[]> {
+): Promise<{ applied: Applied[]; failure?: Failure }> {
   const applied: Applied[] = [];
   const serverSteps = [
     ...plan.servers.steps.filter((s) => s.kind === 'update'),
@@ -281,21 +316,32 @@ async function execute(
       if (!quiet) printLine(t.deployApplied(write.name));
     } catch (error) {
       if (error instanceof StatuserApiError) {
-        throw new CliError(
-          t.deployStopped(write.name, error.format()),
-          error.exitCode,
-        );
+        return {
+          applied,
+          failure: {
+            name: write.name,
+            message: t.deployStopped(write.name, error.format()),
+            exitCode: error.exitCode,
+            outcome_unknown: false,
+          },
+        };
       }
       // A network failure says nothing about whether the server applied it.
-      throw new CliError(
-        t.applyUnknownOutcome(
-          write.name,
-          error instanceof Error ? error.message : String(error),
-        ),
-      );
+      return {
+        applied,
+        failure: {
+          name: write.name,
+          message: t.applyUnknownOutcome(
+            write.name,
+            error instanceof Error ? error.message : String(error),
+          ),
+          exitCode: ExitCode.Failure,
+          outcome_unknown: true,
+        },
+      };
     }
   }
-  return applied;
+  return { applied };
 }
 
 function summarize(plan: FullPlan, dryRun: boolean, applied: Applied[]) {

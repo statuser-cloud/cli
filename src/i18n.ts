@@ -21,7 +21,7 @@ export function detectLang(env: NodeJS.ProcessEnv = process.env): Lang {
 const ru = {
   // Program
   programDescription:
-    'CLI Statuser: сценарии как код, плановые работы в CI, heartbeat для крон-задач',
+    'CLI Statuser: серверы и сценарии как код, плановые работы в CI, инциденты, heartbeat для крон-задач',
   optJson: 'вывести ответ в JSON',
   optApiUrl: 'адрес API (по умолчанию https://api.statuser.cloud)',
   optDebug: 'печатать запросы в stderr (секреты скрыты)',
@@ -142,6 +142,8 @@ const ru = {
   maintenanceEnded: (id: number) => `Плановые работы #${id} завершены.`,
   maintenanceAlreadyEnded: (id: number) =>
     `Плановые работы #${id} уже закончились, дата окончания не менялась.`,
+  messageInvalid: (max: number) =>
+    `Сообщение пустое или длиннее ${max} символов.`,
   maintenanceMessageFailed: (message: string) =>
     `Окно закрыто, но сообщение в таймлайн не добавлено: ${message}`,
   durationInvalid: (raw: string) =>
@@ -301,6 +303,8 @@ const ru = {
   regionInvalid: (region: string) => `Неизвестная локация: ${region}`,
   numberInvalid: (raw: string) => `Ожидается целое число: ${raw}`,
   updateNothing: 'Укажите, что изменить: --interval, --regions, --ssl и т. д.',
+  updateValueInvalid: (id: number, problem: string) =>
+    `#${id}: значение не подходит серверу (${problem}) — ничего не изменено.`,
   updateUnchanged: (id: number) => `#${id}: уже так, пропущен`,
   updateNotApplicable: (id: number, fields: string) =>
     `#${id}: к протоколу сервера не относится (${fields}), пропущен`,
@@ -349,6 +353,8 @@ const ru = {
     `${at}: имя «${name}» уже есть в ${other} — имена в файле должны быть разными.`,
   applyNameTaken: (at: string, name: string, id: number) =>
     `${at}: имя «${name}» уже у сервера #${id} этого проекта.`,
+  applyAuthSecretMismatch: (at: string, field: string, type: string) =>
+    `${at}: ${field} не подходит к http_auth_type ${type} — сервер его не применит.`,
   applyAuthHeaderConflict: (at: string) =>
     `${at}: при http_auth_type заголовок Authorization задавать нельзя.`,
   exportOtherProject: (path: string, project: number) =>
@@ -361,13 +367,69 @@ const ru = {
     `«${name}»: таймаут сценария на этом тарифе — не больше ${max} с.`,
   applyUnknownOutcome: (name: string, message: string) =>
     `Нет ответа на запись «${name}» (${message}): неизвестно, применилась ли она. Запустите statuser diff и повторите apply.`,
+
+  // statuser.json problems: «where: what»
+  cfgObject: 'нужен объект',
+  cfgArray: 'нужен массив',
+  cfgNonEmptyArray: 'нужен непустой массив',
+  cfgRequired: 'обязательное поле',
+  cfgPositiveInt: 'нужно целое положительное число',
+  cfgString: 'нужна строка',
+  cfgNonEmptyString: 'нужна непустая строка или null',
+  cfgBoolean: 'нужно true или false',
+  cfgOneOf: (list: string) => `одно из: ${list}`,
+  cfgListOf: (list: string) => `непустой список из: ${list}`,
+  cfgStrings: 'нужен список строк',
+  cfgRange: (min: number, max: number) => `целое число от ${min} до ${max}`,
+  cfgMaxLength: (max: number) => `не длиннее ${max} символов`,
+  cfgDuplicate: (name: string) => `повторяется «${name}»`,
+  cfgNameOrId: 'нужно name или id',
+  cfgHeartbeatName: 'у heartbeat обязательно',
+  cfgNotUsedBy: (protocol: string) => `не используется протоколом ${protocol}`,
+  cfgProtocol: (list: string) =>
+    `одно из: ${list} (сценарии — в секции scenarios)`,
+  cfgHeaders: 'нужен список { "key", "value" }',
+  cfgHeaderName: (name: string) =>
+    `недопустимое имя заголовка «${name}»: только латиница, цифры и !#$%&'*+.^_\`|~-`,
+  cfgHeaderValue: (name: string) =>
+    `в значении заголовка «${name}» управляющие символы`,
+  cfgCannotRead: (file: string) => `не удалось прочитать ${file}`,
+  cfgFileEmpty: (file: string) => `${file} пустой`,
+  cfgFileTooLarge: 'больше 64 КБ',
+  cfgNoTest: (file: string) =>
+    `в ${file} нет ни одного test(...) — такой сценарий ничего не проверял бы`,
+  cfgIntervalBelowTimeout: 'не меньше таймаута',
+  cfgEnvTooMany: (max: number) => `не больше ${max} переменных`,
+  cfgEnvName: (name: string) =>
+    `${name}: имя — ЗАГЛАВНЫМИ латинскими буквами и не из служебных`,
+  cfgEnvValue: (name: string) => `${name}: значение больше 4 КБ`,
+  cfgJson: (message: string) => `JSON: ${message}`,
+
+  // commander
+  helpUsage: 'Использование:',
+  helpArguments: 'Аргументы:',
+  helpOptions: 'Опции:',
+  helpGlobalOptions: 'Общие опции:',
+  helpCommands: 'Команды:',
+  helpDefault: 'по умолчанию',
+  helpOption: 'показать справку',
+  helpCommand: 'справка по команде',
+  versionOption: 'показать версию',
+  errUnknownOption: (option: string) => `Неизвестная опция: ${option}`,
+  errUnknownCommand: (command: string) => `Неизвестная команда: ${command}`,
+  errMissingOption: (option: string) =>
+    `Не указана обязательная опция ${option}`,
+  errMissingArgument: (argument: string) =>
+    `Не указан обязательный аргумент ${argument}`,
+  errOptionValue: (option: string) => `У опции ${option} нет значения`,
+  errTooManyArguments: 'Лишние аргументы.',
 };
 
 export type Messages = typeof ru;
 
 const en: Messages = {
   programDescription:
-    'Statuser command line: scenario checks as code, maintenance windows in CI, heartbeat for cron jobs',
+    'Statuser CLI: servers and scenario checks as code, maintenance windows in CI, incidents, heartbeat for cron jobs',
   optJson: 'print the response as JSON',
   optApiUrl: 'API address (default https://api.statuser.cloud)',
   optDebug: 'print requests to stderr (secrets hidden)',
@@ -480,6 +542,8 @@ const en: Messages = {
   maintenanceEnded: (id) => `Planned maintenance #${id} ended.`,
   maintenanceAlreadyEnded: (id) =>
     `Planned maintenance #${id} has already ended; the end date was left as is.`,
+  messageInvalid: (max) =>
+    `The message is empty or longer than ${max} characters.`,
   maintenanceMessageFailed: (message) =>
     `The window is closed, but the timeline message was not added: ${message}`,
   durationInvalid: (raw) =>
@@ -632,6 +696,8 @@ const en: Messages = {
   regionInvalid: (region) => `Unknown location: ${region}`,
   numberInvalid: (raw) => `Expected a whole number: ${raw}`,
   updateNothing: 'Pass what to change: --interval, --regions, --ssl, etc.',
+  updateValueInvalid: (id, problem) =>
+    `#${id}: the value does not fit this server (${problem}) — nothing was changed.`,
   updateUnchanged: (id) => `#${id}: already set, skipped`,
   updateNotApplicable: (id, fields) =>
     `#${id}: not applicable to the server protocol (${fields}), skipped`,
@@ -678,6 +744,8 @@ const en: Messages = {
     `${at}: the name “${name}” is already used by ${other} — names in the file must differ.`,
   applyNameTaken: (at, name, id) =>
     `${at}: the name “${name}” already belongs to server #${id} in this project.`,
+  applyAuthSecretMismatch: (at, field, type) =>
+    `${at}: ${field} does not match http_auth_type ${type} — the server would ignore it.`,
   applyAuthHeaderConflict: (at) =>
     `${at}: an Authorization header cannot be set together with http_auth_type.`,
   exportOtherProject: (path, project) =>
@@ -690,6 +758,57 @@ const en: Messages = {
     `“${name}”: the scenario timeout on this plan is at most ${max} s.`,
   applyUnknownOutcome: (name, message) =>
     `No response to the write of “${name}” (${message}): whether it was applied is unknown. Run statuser diff and repeat apply.`,
+
+  cfgObject: 'object expected',
+  cfgArray: 'array expected',
+  cfgNonEmptyArray: 'non-empty array expected',
+  cfgRequired: 'required',
+  cfgPositiveInt: 'positive integer expected',
+  cfgString: 'string expected',
+  cfgNonEmptyString: 'non-empty string or null expected',
+  cfgBoolean: 'true or false expected',
+  cfgOneOf: (list) => `one of: ${list}`,
+  cfgListOf: (list) => `non-empty list of: ${list}`,
+  cfgStrings: 'list of strings expected',
+  cfgRange: (min, max) => `whole number from ${min} to ${max}`,
+  cfgMaxLength: (max) => `at most ${max} characters`,
+  cfgDuplicate: (name) => `duplicate “${name}”`,
+  cfgNameOrId: 'name or id required',
+  cfgHeartbeatName: 'required for heartbeat',
+  cfgNotUsedBy: (protocol) => `not used by protocol ${protocol}`,
+  cfgProtocol: (list) =>
+    `one of: ${list} (scenarios go to the scenarios section)`,
+  cfgHeaders: 'list of { "key", "value" } expected',
+  cfgHeaderName: (name) =>
+    `invalid header name “${name}”: only ASCII letters, digits and !#$%&'*+.^_\`|~-`,
+  cfgHeaderValue: (name) =>
+    `control characters in the value of header “${name}”`,
+  cfgCannotRead: (file) => `cannot read ${file}`,
+  cfgFileEmpty: (file) => `${file} is empty`,
+  cfgFileTooLarge: 'larger than 64 KB',
+  cfgNoTest: (file) =>
+    `${file} has no test(...) call — such a scenario would check nothing`,
+  cfgIntervalBelowTimeout: 'must not be less than the timeout',
+  cfgEnvTooMany: (max) => `no more than ${max} variables`,
+  cfgEnvName: (name) => `${name}: the name must be UPPER_CASE and not reserved`,
+  cfgEnvValue: (name) => `${name}: value larger than 4 KB`,
+  cfgJson: (message) => `JSON: ${message}`,
+
+  helpUsage: 'Usage:',
+  helpArguments: 'Arguments:',
+  helpOptions: 'Options:',
+  helpGlobalOptions: 'Global Options:',
+  helpCommands: 'Commands:',
+  helpDefault: 'default',
+  helpOption: 'display help for command',
+  helpCommand: 'display help for command',
+  versionOption: 'output the version number',
+  errUnknownOption: (option) => `Unknown option: ${option}`,
+  errUnknownCommand: (command) => `Unknown command: ${command}`,
+  errMissingOption: (option) => `Required option ${option} not specified`,
+  errMissingArgument: (argument) => `Missing required argument ${argument}`,
+  errOptionValue: (option) => `Option ${option} has no value`,
+  errTooManyArguments: 'Too many arguments.',
 };
 
 const dictionaries: Record<Lang, Messages> = { ru, en };
