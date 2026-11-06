@@ -635,3 +635,24 @@ describe('ninth review round', () => {
     ).not.toThrow();
   });
 });
+
+describe('eleventh review round', () => {
+  it('refuses an unchanged login next to a switch to none', () => {
+    const current = server({
+      http_auth_type: 'basic',
+      http_auth_username: 'monitor',
+    } as never);
+    const desired = parse([
+      {
+        id: 1,
+        name: 'Site',
+        protocol: 'http',
+        http_auth_type: 'none',
+        http_auth_username: 'monitor',
+      },
+    ]);
+    expect(() =>
+      buildServersPlan(desired, 100000, [current], features),
+    ).toThrow(/http_auth_username/);
+  });
+});

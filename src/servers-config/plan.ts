@@ -271,7 +271,11 @@ function checkAuth(steps: ServerStep[], byId: Map<number, Server>): void {
     if (body.http_auth_token !== undefined && type !== 'bearer') {
       fail(t.applyAuthSecretMismatch(step.entry.at, 'http_auth_token', type));
     }
-    if (body.http_auth_username != null && type !== 'basic') {
+    // The login as written in the file, sent or not: an unchanged login
+    // next to `none` would be wiped by the API and fail the next run.
+    const login =
+      body.http_auth_username ?? step.entry.fields.http_auth_username;
+    if (login != null && type !== 'basic') {
       fail(
         t.applyAuthSecretMismatch(step.entry.at, 'http_auth_username', type),
       );

@@ -165,6 +165,11 @@ function runChild(
     });
     const forwarded = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
     const forward = (signal: NodeJS.Signals) => {
+      // In a shared group the terminal already delivers Ctrl+C and hangup to
+      // the command; sending them again would turn one Ctrl+C into two and
+      // cut short a command that cleans up on the first. The listener stays
+      // anyway: without it Node exits at once and the ping is never sent.
+      if (!ownGroup && signal !== 'SIGTERM') return;
       try {
         if (ownGroup && child.pid) process.kill(-child.pid, signal);
         else child.kill(signal);
