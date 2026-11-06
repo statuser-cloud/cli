@@ -66,12 +66,14 @@ version.
   It mirrors `servers.service.ts` in the backend; when the backend changes
   which protocol uses a field, change it here too.
 - **Host checks are copies of the backend**: `host-pattern.ts` is its
-  `urlPattern`, `forbidden-host.ts` its `isForbiddenIp`
-  (`assert-public-webhook-url.ts`). Only address literals are refused
-  locally — a name resolves differently from the user's network.
+  `urlPattern`, `forbidden-host.ts` its `assertServerHostPublic` without
+  DNS (`localhost` and the literals of `isForbiddenIp`) — a name resolves
+  differently from the user's network. Checked only when a host is set or
+  changed, as the backend does: old internal servers stay editable.
 - **A write whose connection was never set up is retried and reported as
-  not applied** (`NotSentError`); any other network failure is an unknown
-  outcome, never retried.
+  not applied** (`NotSentError`); in `apply` and `deploy` any other network
+  failure is an unknown outcome, never retried. Heartbeat pings are the
+  exception: a repeated ping is harmless, a lost one is silence.
 - **Duplicates are replayed in execution order** (`checkDuplicates`): the
   backend checks each request against the state at that moment, so a
   final-state check alone would let an address swap fail on its first PATCH.

@@ -3,6 +3,7 @@ import { CliError, ExitCode } from '../errors.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
 import { duplicateKey, sameValue } from './fields.js';
+import { isForbiddenHost } from './forbidden-host.js';
 import type { DesiredServer } from './parse.js';
 
 type PlanFeatures = components['schemas']['PlanFeaturesResponseDto'];
@@ -56,7 +57,7 @@ export function buildServersPlan(
   const claimed = new Set<number>();
   const steps: ServerStep[] = [];
 
-  checkNames(desired, inProject);
+  checkNames(desired);
   for (const entry of desired) {
     const server = matchServer(entry, byId, inProject, projectId);
     if (server) {
@@ -74,6 +75,7 @@ export function buildServersPlan(
     }
   }
 
+  checkHosts(steps);
   checkAuth(steps, byId);
   checkLlm(steps, byId);
   checkDuplicates(steps, account);
@@ -108,16 +110,13 @@ function matchServer(
 }
 
 /**
- * Entries without an id are found by name on every run, so names must stay
- * unique in the project after apply — otherwise the next run of the same
- * file would stop on an ambiguous match.
+ * Entries without an id are found by name on every run, so such names must
+ * be unique in the file. Entries pinned by id may share a name, as two
+ * servers of the project may (an own export has them); a name shared with a
+ * server the file does not mention makes the name match itself ambiguous,
+ * and `matchServer` stops there.
  */
-function checkNames(desired: DesiredServer[], inProject: Server[]): void {
-  const pinned = new Set(
-    desired.map((e) => e.id).filter((id) => id !== undefined),
-  );
-  // Only a name match can be ambiguous: two entries pinned by id may share
-  // a name, as two servers of the project may (an own export has them).
+function checkNames(desired: DesiredServer[]): void {
   const fileNames = new Map<string, DesiredServer>();
   for (const entry of desired) {
     if (entry.name === null) continue;
@@ -127,21 +126,14 @@ function checkNames(desired: DesiredServer[], inProject: Server[]): void {
     }
     if (!other || entry.id === undefined) fileNames.set(entry.name, entry);
   }
-  for (const server of inProject) {
-    if (server.name === null || pinned.has(server.id)) continue;
-    const entry = fileNames.get(server.name);
-    // A pinned entry taking the name of another server of the project.
-    if (entry && entry.id !== undefined) {
-      fail(t.applyNameTaken(entry.at, server.name, server.id));
-    }
-  }
 }
 
 function diffServer(entry: DesiredServer, server: Server): ServerStep {
   const current = server as unknown as Record<string, unknown>;
   const body: Record<string, unknown> = {};
   const fields: string[] = [];
-  if (entry.name !== null && entry.name !== server.name) {
+  // `name: null` on a pinned entry clears the name, as the API does.
+  if (entry.name !== server.name) {
     body.name = entry.name;
     fields.push('name');
   }
@@ -230,6 +222,21 @@ function createStep(entry: DesiredServer, projectId: number): ServerStep {
  * switching the type needs the new secret, and a set `Authorization`
  * header would clash with them (`server_http_auth_header_conflict`).
  */
+/**
+ * The backend refuses an internal address only when the host is set or
+ * changed, so a server created before the rule keeps working and stays
+ * editable; the file may list it unchanged.
+ */
+function checkHosts(steps: ServerStep[]): void {
+  for (const step of steps) {
+    if (step.kind === 'unchanged') continue;
+    const host = step.body.host;
+    if (typeof host === 'string' && isForbiddenHost(host)) {
+      fail(`${step.entry.at}.host: ${t.cfgHostInternal}`);
+    }
+  }
+}
+
 function checkAuth(steps: ServerStep[], byId: Map<number, Server>): void {
   for (const step of steps) {
     if (step.kind === 'unchanged') continue;
@@ -247,6 +254,11 @@ function checkAuth(steps: ServerStep[], byId: Map<number, Server>): void {
     }
     if (body.http_auth_token !== undefined && type !== 'bearer') {
       fail(t.applyAuthSecretMismatch(step.entry.at, 'http_auth_token', type));
+    }
+    if (body.http_auth_username != null && type !== 'basic') {
+      fail(
+        t.applyAuthSecretMismatch(step.entry.at, 'http_auth_username', type),
+      );
     }
     if (type === 'none') continue;
     const username = body.http_auth_username ?? current?.http_auth_username;

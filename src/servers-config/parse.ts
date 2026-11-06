@@ -1,6 +1,5 @@
 import { t } from '../i18n.js';
 import { HOST_PATTERN } from './host-pattern.js';
-import { isForbiddenHostLiteral } from './forbidden-host.js';
 import { resolveEnvValue } from '../scenarios/config.js';
 import {
   fieldsFor,
@@ -227,9 +226,6 @@ function checkField(
     if (key === 'host' && !HOST_PATTERN.test(value.trim())) {
       return t.cfgHostInvalid;
     }
-    if (key === 'host' && isForbiddenHostLiteral(value)) {
-      return t.cfgHostInternal;
-    }
     // The API trims these and refuses an empty result.
     if ((key === 'keyword' || key === 'llm_model') && !value.trim()) {
       return t.cfgString;
@@ -240,9 +236,11 @@ function checkField(
       if (AUTH_CONTROL.test(value)) return t.cfgControlChars;
     }
     const max = STRINGS[key];
-    return typeof max === 'number' && value.trim().length > max
-      ? t.cfgMaxLength(max)
-      : null;
+    // The login goes to the API as written, and its length is checked
+    // there untrimmed.
+    const length =
+      key === 'http_auth_username' ? value.length : value.trim().length;
+    return typeof max === 'number' && length > max ? t.cfgMaxLength(max) : null;
   }
   if (ENUMS[key]) {
     return ENUMS[key]!.includes(value as string)

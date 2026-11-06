@@ -108,8 +108,9 @@ async function resolveToken(
 }
 
 /**
- * Each accepted ping is recorded, so only failures that surely did not reach
- * the backend are retried: network errors, 429 and 5xx. 4xx is final.
+ * Network errors, 429 and 5xx are retried, although a ping that timed out
+ * may already be recorded: a repeated ping changes nothing that matters, a
+ * lost failure ping leaves a broken job unnoticed. 4xx is final.
  */
 async function sendHeartbeat(
   client: StatuserClient,

@@ -1,8 +1,9 @@
 import { isIP } from 'node:net';
 
-// A copy of `isForbiddenIp` from the backend (src/utils/assert-public-webhook-url.ts):
-// a server pointing at one of these addresses is refused with
-// `server_host_not_allowed`. Only address literals are checked here — a name
+// A copy of the backend's host gate (`assertServerHostPublic`): `localhost`
+// and `*.localhost`, and the address literals of `isForbiddenIp`
+// (src/utils/assert-public-webhook-url.ts) are refused with
+// `server_host_not_allowed`. Other names are not resolved here — a name
 // resolves differently from the user's network than from ours, and a refusal
 // we cannot be sure of would block a valid apply.
 
@@ -59,8 +60,8 @@ function isForbiddenIPv6(ip: string): boolean {
   );
 }
 
-/** True when the host is an internal address literal the backend refuses. */
-export function isForbiddenHostLiteral(rawHost: string): boolean {
+/** True when the backend surely refuses the host as internal. */
+export function isForbiddenHost(rawHost: string): boolean {
   const trimmed = rawHost.trim();
   const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
     ? trimmed
@@ -72,6 +73,7 @@ export function isForbiddenHostLiteral(rawHost: string): boolean {
     return false;
   }
   host = host.replace(/^\[/, '').replace(/\]$/, '');
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
   const version = isIP(host);
   if (version === 4) return isForbiddenIPv4(host);
   if (version === 6) return isForbiddenIPv6(host);

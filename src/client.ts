@@ -110,7 +110,7 @@ export class StatuserClient {
         if (NOT_SENT_CODES.has(reason)) {
           if (connectRetries < MAX_CONNECT_RETRIES) {
             connectRetries += 1;
-            this.debug(`× ${reason}, retrying`);
+            this.debug(t.debugRetry(reason));
             await sleep(CONNECT_RETRY_DELAY_MS * connectRetries);
             continue;
           }

@@ -57,6 +57,7 @@ const ru = {
     `Адрес API должен быть https (http разрешён только для localhost): ${url}`,
   foreignOrigin: (url: string) =>
     `Запрос на ${url} не отправлен: ключ уходит только на адрес API.`,
+  debugRetry: (reason: string) => `× ${reason}, повтор`,
   networkError: (message: string) => `Сеть: ${message}`,
 
   // api
@@ -354,8 +355,6 @@ const ru = {
     `${at}: на этом тарифе недоступны локации ${locations}.`,
   applyDuplicateName: (at: string, other: string, name: string) =>
     `${at}: имя «${name}» уже есть в ${other} — имена в файле должны быть разными.`,
-  applyNameTaken: (at: string, name: string, id: number) =>
-    `${at}: имя «${name}» уже у сервера #${id} этого проекта.`,
   applyAuthSecretMismatch: (at: string, field: string, type: string) =>
     `${at}: ${field} не подходит к http_auth_type ${type} — сервер его не применит.`,
   applyAuthHeaderConflict: (at: string) =>
@@ -473,6 +472,7 @@ const en: Messages = {
     `The API address must be https (http only for localhost): ${url}`,
   foreignOrigin: (url) =>
     `Request to ${url} not sent: the key only goes to the API address.`,
+  debugRetry: (reason) => `× ${reason}, retrying`,
   networkError: (message) => `Network: ${message}`,
 
   cmdApi: 'send an arbitrary API request (like `gh api`)',
@@ -756,8 +756,6 @@ const en: Messages = {
     `${at}: locations ${locations} are not available on this plan.`,
   applyDuplicateName: (at, other, name) =>
     `${at}: the name “${name}” is already used by ${other} — names in the file must differ.`,
-  applyNameTaken: (at, name, id) =>
-    `${at}: the name “${name}” already belongs to server #${id} in this project.`,
   applyAuthSecretMismatch: (at, field, type) =>
     `${at}: ${field} does not match http_auth_type ${type} — the server would ignore it.`,
   applyAuthHeaderConflict: (at) =>

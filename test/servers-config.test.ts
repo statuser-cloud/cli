@@ -449,15 +449,64 @@ describe('buildServersPlan after review', () => {
 });
 
 describe('third review round', () => {
-  it('refuses an internal address literal before any write', () => {
-    for (const host of ['127.0.0.1', 'http://10.1.2.3:8080/x', '[::1]']) {
-      expect(() => parse([{ name: 'A', protocol: 'ping', host }])).toThrow(
+  it('refuses an internal host only when it is set or changed', () => {
+    for (const host of [
+      '127.0.0.1',
+      'http://10.1.2.3:8080/x',
+      '[::1]',
+      'http://app.localhost',
+    ]) {
+      const desired = parse([{ name: 'A', protocol: 'ping', host }]);
+      expect(() => buildServersPlan(desired, 100000, [], features)).toThrow(
         /host/,
       );
     }
-    expect(() =>
-      parse([{ name: 'A', protocol: 'ping', host: '8.8.8.8' }]),
-    ).not.toThrow();
+    // A server created before the rule stays in the file untouched.
+    const old = server({
+      id: 5,
+      name: 'Old',
+      protocol: 'ping',
+      host: '10.0.0.1',
+    });
+    const kept = parse([
+      { id: 5, name: 'Old', protocol: 'ping', host: '10.0.0.1' },
+    ]);
+    expect(buildServersPlan(kept, 100000, [old], features).steps[0]!.kind).toBe(
+      'unchanged',
+    );
+  });
+
+  it('refuses a login without Basic authorization', () => {
+    const desired = parse([
+      {
+        name: 'B',
+        protocol: 'http',
+        host: 'https://a.example.com',
+        http_auth_username: 'monitor',
+      },
+    ]);
+    expect(() => buildServersPlan(desired, 100000, [], features)).toThrow(
+      /http_auth_username/,
+    );
+  });
+
+  it('clears the name of a pinned server with name: null', () => {
+    const desired = parse([{ id: 1, name: null, protocol: 'http' }]);
+    const plan = buildServersPlan(desired, 100000, [server()], features);
+    expect(plan.steps[0]).toMatchObject({
+      kind: 'update',
+      body: { name: null },
+    });
+  });
+
+  it('keeps a pinned entry next to an unmanaged server of the same name', () => {
+    const inProject = [
+      server(),
+      server({ id: 2, host: 'https://b.example.com' }),
+    ];
+    const { entries } = exportServers([inProject[0]!]);
+    const plan = buildServersPlan(parse(entries), 100000, inProject, features);
+    expect(plan.steps[0]!.kind).toBe('unchanged');
   });
 
   it('refuses blank required strings the API trims to empty', () => {
