@@ -119,8 +119,11 @@ export function sameValue(field: string, a: unknown, b: unknown): boolean {
 }
 
 // Header names whose values usually carry credentials.
+// Wide on purpose: a value shown by mistake is a leak, a value hidden by
+// mistake is one `statuser api` call away. `key` covers X-Access-Key,
+// Ocp-Apim-Subscription-Key and the like.
 const SECRET_HEADER =
-  /authorization|cookie|token|secret|api[-_]?key|password|auth/i;
+  /authorization|auth|cookie|token|secret|passw|key|session|signature|credential|private/i;
 
 export function isSecretHeader(name: string): boolean {
   return SECRET_HEADER.test(name);

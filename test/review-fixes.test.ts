@@ -675,3 +675,53 @@ describe('fifteenth review round', () => {
     });
   });
 });
+
+describe('sixteenth review round', () => {
+  it('lets a later scenario take a script an earlier step frees', () => {
+    const a = {
+      id: 10,
+      name: 'A',
+      project_id: 100000,
+      protocol: 'scenario',
+      scenario_script: 'test("x", async () => {})',
+      scenario_env_keys: [],
+      check_interval: 600,
+      request_timeout: 30,
+      locations: ['msk-1'],
+    };
+    const entry = (name: string, script: string, id?: number) => ({
+      id,
+      name,
+      file: `${name}.spec.ts`,
+      script,
+      interval: 600,
+      timeout: 30,
+      location: 'msk-1',
+    });
+    const plan = buildDeployPlan(
+      {
+        projectId: 100000,
+        scenarios: [
+          entry('A', 'test("y", async () => {})', 10),
+          entry('B', 'test("x", async () => {})'),
+        ],
+      } as never,
+      [a] as never,
+    );
+    expect(plan.steps.map((s) => s.kind)).toEqual(['update', 'create']);
+  });
+
+  it('hides access keys in server headers', async () => {
+    const result = await cli(
+      () => ({
+        body: {
+          id: 1,
+          protocol: 'http',
+          headers: [{ key: 'Ocp-Apim-Subscription-Key', value: 'live-key-1' }],
+        },
+      }),
+      ['servers', 'get', '1', '--json'],
+    );
+    expect(result.stdout).not.toContain('live-key-1');
+  });
+});

@@ -79,17 +79,38 @@ export function buildDeployPlan(
     byScript.set(scenario.script, scenario);
   }
 
+  // Who holds each script, replayed in execution order (the config's): a
+  // script freed by an earlier step may be taken by a later one, as on the
+  // API. A swap between two servers still clashes on its first PATCH and is
+  // left to two deploys.
+  const holders = new Map<string, ScenarioServer[]>();
+  for (const server of scenarios) {
+    const list = holders.get(server.scenario_script ?? '') ?? [];
+    list.push(server);
+    holders.set(server.scenario_script ?? '', list);
+  }
   for (const scenario of config.scenarios) {
     if (!writesScript(scenario)) continue;
     const own = matched.get(scenario);
-    const holder = scenarios.find(
-      (s) => s.scenario_script === scenario.script && s.id !== own?.id,
+    const holder = (holders.get(scenario.script) ?? []).find(
+      (s) => s.id !== own?.id,
     );
-    // A script moving from one managed server to another would still clash
-    // on the first PATCH; that swap is left to two deploys.
     if (holder) {
       fail(t.deployScriptTaken(scenario.name, holder.id, holder.project_id));
     }
+    if (own) {
+      const old = own.scenario_script ?? '';
+      holders.set(
+        old,
+        (holders.get(old) ?? []).filter((s) => s.id !== own.id),
+      );
+    }
+    const taker =
+      own ?? ({ id: -1, project_id: config.projectId } as ScenarioServer);
+    holders.set(scenario.script, [
+      ...(holders.get(scenario.script) ?? []),
+      taker,
+    ]);
   }
 
   const steps: PlanStep[] = config.scenarios.map((scenario) => {
