@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { link, rename, rm, writeFile } from 'node:fs/promises';
 import { CliError, ExitCode } from './errors.js';
 import { t } from './i18n.js';
@@ -13,9 +14,11 @@ export async function writeOwnFile(
   data: string | Buffer,
   force: boolean,
 ): Promise<void> {
-  const temp = `${path}.${process.pid}.tmp`;
+  // A random name, removed only once this call has created it: a file
+  // that happened to exist under that name is not ours to delete.
+  const temp = `${path}.${randomUUID()}.tmp`;
+  await writeFile(temp, data, { mode: 0o600, flag: 'wx' });
   try {
-    await writeFile(temp, data, { mode: 0o600, flag: 'wx' });
     if (force) {
       await rename(temp, path);
       return;

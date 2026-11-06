@@ -36,6 +36,30 @@ describe('statuser run', { timeout: 30_000 }, () => {
     expect(api.requests[0]?.headers.authorization).toBeUndefined();
   });
 
+  it('keeps stdout to one JSON report with --json', async () => {
+    const api = await heartbeatApi();
+    const result = await runCli(
+      [
+        '--json',
+        'run',
+        '--heartbeat',
+        'tok',
+        '--',
+        NODE,
+        '-e',
+        'console.log("noise")',
+      ],
+      { STATUSER_API_URL: api.url },
+    );
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      exit_code: 0,
+      fail: false,
+      delivered: true,
+    });
+    expect(result.stderr).toContain('noise');
+  });
+
   it('reports failure and keeps the command exit code', async () => {
     const api = await heartbeatApi();
     const result = await run(api, [NODE, '-e', 'process.exit(3)']);

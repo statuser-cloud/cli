@@ -13,8 +13,10 @@ import {
   type BulkChange,
 } from '../servers-update.js';
 import { isSecretHeader } from '../servers-config/fields.js';
+import { patchPlanProblem } from '../servers-config/plan.js';
 
 export type Server = components['schemas']['ServerResponseDto'];
+type CurrentPlan = components['schemas']['CurrentPlanResponseDto'];
 
 export async function listServers(
   client: StatuserClient,
@@ -203,8 +205,17 @@ export function registerServersCommands(program: Command): void {
       const plans = new Map(
         targets.map((server) => [server.id, planServerPatch(server, change)]),
       );
+      const current = await client.call<CurrentPlan>({
+        method: 'GET',
+        path: '/v1/billing/current-plan',
+      });
       for (const server of targets) {
-        const problem = bulkTargetProblem(server, plans.get(server.id)!);
+        const plan = plans.get(server.id)!;
+        const problem =
+          bulkTargetProblem(server, plan) ??
+          (plan.fields.length
+            ? patchPlanProblem(server, plan.body, current.features)
+            : null);
         if (problem) {
           throw new CliError(
             t.updateValueInvalid(server.id, problem),
@@ -270,6 +281,10 @@ interface UpdateOptions {
   dryRun?: boolean;
 }
 
+const CONFIRM_DELAY_MAX = 3600;
+const LATENCY_MIN = 50;
+const LATENCY_MAX = 60_000;
+
 function toBulkChange(opts: UpdateOptions): BulkChange {
   const regions = opts.regions
     ?.split(',')
@@ -282,6 +297,19 @@ function toBulkChange(opts: UpdateOptions): BulkChange {
         throw new CliError(t.regionInvalid(region), ExitCode.Usage);
       }
     }
+  }
+  // API bounds of the flags that do not depend on the protocol.
+  if (
+    opts.confirmDelay !== undefined &&
+    opts.confirmDelay > CONFIRM_DELAY_MAX
+  ) {
+    throw new CliError(t.numberRange(0, CONFIRM_DELAY_MAX), ExitCode.Usage);
+  }
+  if (
+    typeof opts.latencyAlert === 'number' &&
+    (opts.latencyAlert < LATENCY_MIN || opts.latencyAlert > LATENCY_MAX)
+  ) {
+    throw new CliError(t.numberRange(LATENCY_MIN, LATENCY_MAX), ExitCode.Usage);
   }
   const change: BulkChange = {
     interval: opts.interval,
@@ -335,11 +363,7 @@ export function pickTargets(
     const id = parseId(raw);
     const server = byId.get(id);
     if (!server) {
-      throw new StatuserApiError(
-        404,
-        `server ${id} not found`,
-        'server_not_found',
-      );
+      throw new StatuserApiError(404, t.notFound(id), 'server_not_found');
     }
     return server;
   });

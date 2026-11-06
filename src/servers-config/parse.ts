@@ -1,4 +1,5 @@
 import { t } from '../i18n.js';
+import { HOST_PATTERN } from './host-pattern.js';
 import { resolveEnvValue } from '../scenarios/config.js';
 import {
   fieldsFor,
@@ -76,6 +77,12 @@ const NAME_MAX = 150;
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9a-zA-Z-]+$/;
 // eslint-disable-next-line no-control-regex
 const HEADER_CONTROL = /[\x00-\x08\x0a-\x1f\x7f]/;
+// HTTP credentials allow no control characters at all (`server-http-auth.ts`).
+// eslint-disable-next-line no-control-regex
+const AUTH_CONTROL = /[\x00-\x1f\x7f]/;
+// `SUCCESS_HTTP_CODE_PATTERN` and its list size in the backend.
+const SUCCESS_CODE = /^[1-5](xx|\d\d)$/;
+const SUCCESS_CODES_MAX = 20;
 
 /**
  * Validates the `servers` section. Everything that can be checked without
@@ -138,7 +145,15 @@ export function parseServersSection(
         ) {
           return fail(`${at}.${key}: ${t.cfgString}`);
         }
-        const resolved = resolveEnvValue(value, `${at}.${key}`, env);
+        let resolved = resolveEnvValue(value, `${at}.${key}`, env);
+        if (key === 'http_auth_token') {
+          // The backend trims a token and refuses an empty one.
+          resolved = resolved.trim();
+          if (!resolved) return fail(`${at}.${key}: ${t.cfgString}`);
+        }
+        if (key !== 'llm_api_key' && AUTH_CONTROL.test(resolved)) {
+          return fail(`${at}.${key}: ${t.cfgControlChars}`);
+        }
         if (resolved.length > SECRET_MAX[key]!) {
           return fail(`${at}.${key}: ${t.cfgMaxLength(SECRET_MAX[key]!)}`);
         }
@@ -202,6 +217,14 @@ function checkField(
   }
   if (key in STRINGS) {
     if (typeof value !== 'string') return t.cfgString;
+    if (key === 'host' && !HOST_PATTERN.test(value.trim())) {
+      return t.cfgHostInvalid;
+    }
+    if (key === 'http_auth_username') {
+      // RFC 7617: the colon separates username and password.
+      if (value.includes(':')) return t.cfgUsernameColon;
+      if (AUTH_CONTROL.test(value)) return t.cfgControlChars;
+    }
     const max = STRINGS[key];
     return typeof max === 'number' && value.trim().length > max
       ? t.cfgMaxLength(max)
@@ -228,9 +251,15 @@ function checkField(
       : t.cfgListOf(DNS_TYPES.join(', '));
   }
   if (key === 'success_http_codes') {
-    return Array.isArray(value) && value.every((v) => typeof v === 'string')
+    return Array.isArray(value) &&
+      value.length >= 1 &&
+      value.length <= SUCCESS_CODES_MAX &&
+      value.every(
+        (v) =>
+          typeof v === 'string' && SUCCESS_CODE.test(v.trim().toLowerCase()),
+      )
       ? null
-      : t.cfgStrings;
+      : t.cfgSuccessCodes(SUCCESS_CODES_MAX);
   }
   if (key === 'headers') {
     return Array.isArray(value) &&

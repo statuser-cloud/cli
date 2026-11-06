@@ -96,6 +96,7 @@ const ru = {
   bulkSummary: (ok: number, failed: number) =>
     failed ? `Готово: ${ok}, ошибок: ${failed}` : `Готово: ${ok}`,
   invalidId: (raw: string) => `Неверный id: ${raw}`,
+  notFound: (id: number) => `#${id} не найден`,
   fromFileInvalid: (path: string) =>
     `В ${path} нет списка серверов из \`servers pause --json\``,
 
@@ -302,6 +303,8 @@ const ru = {
   regionsEmpty: 'Список локаций пустой.',
   regionInvalid: (region: string) => `Неизвестная локация: ${region}`,
   numberInvalid: (raw: string) => `Ожидается целое число: ${raw}`,
+  numberRange: (min: number, max: number) =>
+    `Допустимо целое число от ${min} до ${max}.`,
   updateNothing: 'Укажите, что изменить: --interval, --regions, --ssl и т. д.',
   updateValueInvalid: (id: number, problem: string) =>
     `#${id}: значение не подходит серверу (${problem}) — ничего не изменено.`,
@@ -403,7 +406,14 @@ const ru = {
   cfgEnvName: (name: string) =>
     `${name}: имя — ЗАГЛАВНЫМИ латинскими буквами и не из служебных`,
   cfgEnvValue: (name: string) => `${name}: значение больше 4 КБ`,
-  cfgJson: (message: string) => `JSON: ${message}`,
+  cfgHostInvalid: 'не похоже на адрес: домен, IP или URL',
+  cfgUsernameColon: 'в логине не может быть двоеточия',
+  cfgControlChars: 'управляющие символы недопустимы',
+  cfgSuccessCodes: (max: number) => `от 1 до ${max} кодов вида 200 или 2xx`,
+  cfgLlmModelWithoutKey:
+    'без llm_api_key модель не используется и не сохраняется — уберите llm_model или добавьте ключ',
+  cfgJson: (position: string) =>
+    position ? `некорректный JSON (позиция ${position})` : 'некорректный JSON',
 
   // commander
   helpUsage: 'Использование:',
@@ -498,6 +508,7 @@ const en: Messages = {
   bulkSummary: (ok, failed) =>
     failed ? `Done: ${ok}, errors: ${failed}` : `Done: ${ok}`,
   invalidId: (raw) => `Invalid id: ${raw}`,
+  notFound: (id) => `#${id} not found`,
   fromFileInvalid: (path) =>
     `${path} has no server list from \`servers pause --json\``,
 
@@ -695,6 +706,7 @@ const en: Messages = {
   regionsEmpty: 'The location list is empty.',
   regionInvalid: (region) => `Unknown location: ${region}`,
   numberInvalid: (raw) => `Expected a whole number: ${raw}`,
+  numberRange: (min, max) => `A whole number from ${min} to ${max} is allowed.`,
   updateNothing: 'Pass what to change: --interval, --regions, --ssl, etc.',
   updateValueInvalid: (id, problem) =>
     `#${id}: the value does not fit this server (${problem}) — nothing was changed.`,
@@ -792,7 +804,14 @@ const en: Messages = {
   cfgEnvTooMany: (max) => `no more than ${max} variables`,
   cfgEnvName: (name) => `${name}: the name must be UPPER_CASE and not reserved`,
   cfgEnvValue: (name) => `${name}: value larger than 4 KB`,
-  cfgJson: (message) => `JSON: ${message}`,
+  cfgHostInvalid: 'not an address: a domain, IP or URL expected',
+  cfgUsernameColon: 'the username cannot contain a colon',
+  cfgControlChars: 'control characters are not allowed',
+  cfgSuccessCodes: (max) => `1 to ${max} codes like 200 or 2xx`,
+  cfgLlmModelWithoutKey:
+    'without llm_api_key the model is neither used nor stored — drop llm_model or add the key',
+  cfgJson: (position) =>
+    position ? `invalid JSON (position ${position})` : 'invalid JSON',
 
   helpUsage: 'Usage:',
   helpArguments: 'Arguments:',

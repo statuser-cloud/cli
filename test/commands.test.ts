@@ -138,6 +138,19 @@ describe('maintenance end', { timeout: 30_000 }, () => {
     ]);
     expect(server!.requests.at(-1)?.body).toEqual({ message: 'Done' });
   });
+
+  it('does not post the same message twice on a retried step', async () => {
+    const item = {
+      ...maintenance(new Date(Date.now() - 60_000)),
+      updates: [{ id: 1, message: 'Done' }],
+    };
+    const result = await cli(
+      () => ({ body: [item] }),
+      ['maintenance', 'end', '7', '--page', '12', '--message', ' Done '],
+    );
+    expect(result.code).toBe(0);
+    expect(writes(server!)).toEqual([]);
+  });
 });
 
 const currentPlan = {

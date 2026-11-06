@@ -160,6 +160,18 @@ describe('apply and export safety', { timeout: 30_000 }, () => {
     expect(report.error.name).toBe('B');
   });
 
+  it('export -o --json reports the written file', async () => {
+    const file = join(tempDir(), 'out.json');
+    const result = await cli(
+      () => ({
+        body: [{ id: 1, name: 'A', protocol: 'ping', host: '1.1.1.1' }],
+      }),
+      ['export', '--project', '100000', '-o', file, '--json'],
+    );
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ file, servers: 1 });
+  });
+
   it('does not overwrite a broken statuser.json on export --force', async () => {
     const file = join(tempDir(), 'statuser.json');
     writeFileSync(file, '{ "project_id": 100000, "scenarios": [], }');
@@ -242,7 +254,7 @@ describe('servers section checks', () => {
         {
           name: 'A',
           protocol: 'http',
-          host: 'https://a',
+          host: 'https://a.example.com',
           headers: [{ key: 'X Api Key', value: 'v' }],
         },
       ]),
@@ -254,7 +266,7 @@ describe('servers section checks', () => {
       {
         name: 'A',
         protocol: 'http',
-        host: 'https://a',
+        host: 'https://a.example.com',
         http_auth_type: 'basic',
         http_auth_username: 'u',
         http_auth_password: '',
@@ -274,7 +286,7 @@ describe('servers section checks', () => {
         {
           name: 'A',
           protocol: 'ping',
-          host: 'x',
+          host: 'x.example.com',
           description: 'a'.repeat(501),
         },
       ]),

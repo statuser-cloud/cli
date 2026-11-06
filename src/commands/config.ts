@@ -11,6 +11,7 @@ import {
 import { writeOwnFile } from '../files.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
+import { jsonErrorPosition } from '../json-error.js';
 import { printErr, printJson, printLine } from '../output.js';
 import { loadScenarioConfig } from '../scenarios/config.js';
 import { buildDeployPlan, type DeployPlan } from '../scenarios/plan.js';
@@ -86,7 +87,11 @@ export function registerConfigCommands(program: Command): void {
         const text = `${JSON.stringify(document, null, 2)}\n`;
         if (opts.output) {
           await writeOwnFile(opts.output, text, !!opts.force);
-          printErr(t.fileSaved(opts.output));
+          if (globalOptions(command).json) {
+            printJson({ file: opts.output, servers: result.entries.length });
+          } else {
+            printErr(t.fileSaved(opts.output));
+          }
         } else {
           process.stdout.write(text);
         }
@@ -376,15 +381,12 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
     parsed = JSON.parse(text);
   } catch (error) {
     throw new CliError(
-      t.configInvalid(path, `JSON: ${(error as Error).message}`),
+      t.configInvalid(path, t.cfgJson(jsonErrorPosition(error))),
       ExitCode.Usage,
     );
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new CliError(
-      t.configInvalid(path, 'expected an object'),
-      ExitCode.Usage,
-    );
+    throw new CliError(t.configInvalid(path, t.cfgObject), ExitCode.Usage);
   }
   return parsed as Record<string, unknown>;
 }

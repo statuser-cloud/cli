@@ -4,6 +4,7 @@ import type { HttpMethod, QueryValue } from '../client.js';
 import { authedClient, globalOptions } from '../context.js';
 import { CliError, ExitCode } from '../errors.js';
 import { t } from '../i18n.js';
+import { jsonErrorPosition } from '../json-error.js';
 import { printJson, printLine } from '../output.js';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
@@ -57,7 +58,7 @@ export function registerApiCommand(program: Command): void {
           body = JSON.parse(text);
         } catch (error) {
           throw new CliError(
-            t.configInvalid(opts.input, t.cfgJson((error as Error).message)),
+            t.configInvalid(opts.input, t.cfgJson(jsonErrorPosition(error))),
             ExitCode.Usage,
           );
         }

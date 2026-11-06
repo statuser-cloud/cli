@@ -145,13 +145,15 @@ describe('exportServers', () => {
 describe('parseServersSection', () => {
   it('rejects a field the protocol does not use', () => {
     expect(() =>
-      parse([{ name: 'A', protocol: 'ping', host: 'x', port: 80 }]),
+      parse([{ name: 'A', protocol: 'ping', host: 'x.example.com', port: 80 }]),
     ).toThrow(/port/);
   });
 
   it('rejects an empty location list', () => {
     expect(() =>
-      parse([{ name: 'A', protocol: 'ping', host: 'x', locations: [] }]),
+      parse([
+        { name: 'A', protocol: 'ping', host: 'x.example.com', locations: [] },
+      ]),
     ).toThrow(/locations/);
   });
 
@@ -161,7 +163,7 @@ describe('parseServersSection', () => {
         {
           name: 'A',
           protocol: 'http',
-          host: 'https://a',
+          host: 'https://a.example.com',
           http_auth_type: 'bearer',
           http_auth_token: '$TOKEN',
           headers: [{ key: 'X', value: '$$raw' }],
@@ -187,7 +189,10 @@ describe('buildServersPlan', () => {
     const plan = buildServersPlan(
       desired,
       100000,
-      [server(), server({ id: 2, name: 'Other', host: 'https://b' })],
+      [
+        server(),
+        server({ id: 2, name: 'Other', host: 'https://b.example.com' }),
+      ],
       features,
     );
     expect(plan.steps[0]!.kind).toBe('unchanged');
@@ -215,7 +220,7 @@ describe('buildServersPlan', () => {
 
   it('refuses to change the protocol', () => {
     const desired = parse([
-      { id: 1, name: 'Site', protocol: 'ping', host: 'x' },
+      { id: 1, name: 'Site', protocol: 'ping', host: 'x.example.com' },
     ]);
     expect(() =>
       buildServersPlan(desired, 100000, [server()], features),
@@ -265,7 +270,7 @@ describe('buildServersPlan', () => {
       {
         name: 'A',
         protocol: 'http',
-        host: 'https://a',
+        host: 'https://a.example.com',
         http_auth_type: 'basic',
         http_auth_username: 'u',
       },
@@ -296,7 +301,14 @@ describe('buildServersPlan', () => {
 
   it('rejects values outside the API range while parsing', () => {
     expect(() =>
-      parse([{ name: 'A', protocol: 'ping', host: 'x', request_timeout: 0 }]),
+      parse([
+        {
+          name: 'A',
+          protocol: 'ping',
+          host: 'x.example.com',
+          request_timeout: 0,
+        },
+      ]),
     ).toThrow(/request_timeout/);
   });
 
@@ -347,7 +359,7 @@ describe('buildServersPlan', () => {
 
   it('fails on a pinned id that is gone instead of creating a copy', () => {
     const desired = parse([
-      { id: 99, name: 'Gone', protocol: 'ping', host: 'x' },
+      { id: 99, name: 'Gone', protocol: 'ping', host: 'x.example.com' },
     ]);
     expect(() => buildServersPlan(desired, 100000, [], features)).toThrow(
       CliError,
@@ -358,16 +370,16 @@ describe('buildServersPlan', () => {
 describe('buildServersPlan after review', () => {
   it('refuses a swap of addresses that would collide on the first write', () => {
     const desired = parse([
-      { id: 1, name: 'A', protocol: 'http', host: 'https://b' },
-      { id: 2, name: 'B', protocol: 'http', host: 'https://a' },
+      { id: 1, name: 'A', protocol: 'http', host: 'https://b.example.com' },
+      { id: 2, name: 'B', protocol: 'http', host: 'https://a.example.com' },
     ]);
     expect(() =>
       buildServersPlan(
         desired,
         100000,
         [
-          server({ id: 1, name: 'A', host: 'https://a' }),
-          server({ id: 2, name: 'B', host: 'https://b' }),
+          server({ id: 1, name: 'A', host: 'https://a.example.com' }),
+          server({ id: 2, name: 'B', host: 'https://b.example.com' }),
         ],
         features,
       ),
@@ -376,7 +388,12 @@ describe('buildServersPlan after review', () => {
 
   it('fills the panel defaults the API requires on create', () => {
     const desired = parse([
-      { name: 'Word', protocol: 'keyword', host: 'https://a', keyword: 'OK' },
+      {
+        name: 'Word',
+        protocol: 'keyword',
+        host: 'https://a.example.com',
+        keyword: 'OK',
+      },
     ]);
     const plan = buildServersPlan(desired, 100000, [], {
       ...(features as object),
@@ -403,7 +420,10 @@ describe('buildServersPlan after review', () => {
     const plan = buildServersPlan(
       desired,
       100000,
-      [server(), server({ id: 2, name: 'Other', host: 'https://b' })],
+      [
+        server(),
+        server({ id: 2, name: 'Other', host: 'https://b.example.com' }),
+      ],
       {
         ...(features as object),
         servers_limit: 1,

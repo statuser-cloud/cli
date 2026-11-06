@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   chmod,
   mkdir,
@@ -80,14 +81,15 @@ export async function saveConfig(config: SavedConfig): Promise<string> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   // A fresh file renamed over the old one: writing into an existing file
   // would keep its permissions, and the new key would sit readable by others
-  // until a chmod.
-  const temp = `${path}.${process.pid}.tmp`;
+  // until a chmod. The temporary name is random and removed only once this
+  // call has created it.
+  const temp = `${path}.${randomUUID()}.tmp`;
+  await writeFile(temp, `${JSON.stringify(config, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+    flag: 'wx',
+  });
   try {
-    await writeFile(temp, `${JSON.stringify(config, null, 2)}\n`, {
-      encoding: 'utf8',
-      mode: 0o600,
-      flag: 'wx',
-    });
     if (process.platform !== 'win32') await chmod(temp, 0o600);
     await rename(temp, path);
   } catch (error) {

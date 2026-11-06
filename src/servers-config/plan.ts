@@ -75,6 +75,7 @@ export function buildServersPlan(
   }
 
   checkAuth(steps, byId);
+  checkLlm(steps, byId);
   checkDuplicates(steps, account);
   checkPlan(steps, account, features, plannedScenarioCreates);
 
@@ -259,6 +260,32 @@ function checkAuth(steps: ServerStep[], byId: Map<number, Server>): void {
     }>;
     if (headers.some((h) => h.key.trim().toLowerCase() === 'authorization')) {
       fail(t.applyAuthHeaderConflict(step.entry.at));
+    }
+  }
+}
+
+/**
+ * The LLM configuration as it ends up (`assertLlmConfigUsable`): a key
+ * needs a model, and a model without a key is dropped by the backend — the
+ * duplicate check would then compare a model that is never stored.
+ */
+function checkLlm(steps: ServerStep[], byId: Map<number, Server>): void {
+  for (const step of steps) {
+    if (step.kind === 'unchanged' || step.entry.protocol !== 'llm') continue;
+    const current =
+      step.kind === 'update' ? byId.get(step.serverId) : undefined;
+    const body = step.body;
+    const hasKey =
+      body.llm_api_key !== undefined
+        ? Boolean(body.llm_api_key)
+        : current?.llm_check_mode === 'inference';
+    const model =
+      (body.llm_model as string | undefined) ?? current?.llm_model ?? null;
+    if (hasKey && !model) {
+      fail(t.applyFieldRequired(step.entry.at, 'llm_model'));
+    }
+    if (!hasKey && body.llm_model !== undefined) {
+      fail(`${step.entry.at}.llm_model: ${t.cfgLlmModelWithoutKey}`);
     }
   }
 }
@@ -453,6 +480,14 @@ export function checkScenarioLimits(
   features: PlanFeatures,
 ): void {
   const creates = steps.filter((s) => s.kind === 'create').length;
+  // Without scenarios on the plan the backend refuses any write to one,
+  // not only new ones (`validateScenarioFeatures`).
+  if (
+    features.scenarios_limit <= 0 &&
+    steps.some((s) => s.kind !== 'unchanged')
+  ) {
+    fail(t.applyFeatureUnavailable('scenarios', 'scenarios_limit'));
+  }
   if (creates && existingScenarios + creates > features.scenarios_limit) {
     fail(
       t.applyScenariosLimit(
@@ -482,4 +517,48 @@ export function checkScenarioLimits(
       );
     }
   }
+}
+
+/**
+ * Plan checks for one PATCH of `servers update`, the same the backend runs:
+ * features of the server as it will be, the minimal interval, available
+ * locations, and for scenarios their own limits. Null when it fits.
+ */
+export function patchPlanProblem(
+  server: Server,
+  body: Record<string, unknown>,
+  features: PlanFeatures,
+): string | null {
+  if (server.protocol === 'scenario') {
+    if (features.scenarios_limit <= 0) return 'scenarios_limit';
+    const interval = (body.check_interval as number) ?? server.check_interval;
+    const timeout = (body.request_timeout as number) ?? server.request_timeout;
+    if (interval < features.scenario_min_check_interval_seconds) {
+      return `interval ≥ ${features.scenario_min_check_interval_seconds}`;
+    }
+    if (timeout > features.scenario_max_timeout_seconds) {
+      return `timeout ≤ ${features.scenario_max_timeout_seconds}`;
+    }
+    return null;
+  }
+  const step = {
+    kind: 'update',
+    serverId: server.id,
+    body,
+    fields: Object.keys(body),
+    entry: { at: `#${server.id}` },
+  } as unknown as ServerStep;
+  const needed = requirements(step, server);
+  const missing = needed.features.find((feature) => !features[feature]);
+  if (missing) return missing;
+  if (
+    needed.interval !== undefined &&
+    needed.interval < features.min_check_interval_seconds
+  ) {
+    return `interval ≥ ${features.min_check_interval_seconds}`;
+  }
+  const unavailable = (needed.locations ?? []).filter(
+    (l) => !features.available_locations.includes(l),
+  );
+  return unavailable.length ? unavailable.join(', ') : null;
 }

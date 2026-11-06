@@ -170,7 +170,7 @@ async function findReport(
   if (!report) {
     throw new StatuserApiError(
       404,
-      `incident report ${id} not found`,
+      t.notFound(id),
       'status_page_incident_report_not_found',
     );
   }

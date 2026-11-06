@@ -264,23 +264,33 @@ function runExitCode(status: ScenarioRunStatus): number {
   return ExitCode.ScenarioFailed;
 }
 
-// Values shorter than this would mask ordinary words of the output.
-const MIN_MASKED_LENGTH = 4;
-
-export function maskSecrets<T>(value: T, secrets: string[]): T {
-  const masked = secrets.filter((s) => s.length >= MIN_MASKED_LENGTH);
-  if (!masked.length) return value;
-  const replace = (text: string) =>
-    masked.reduce((acc, secret) => acc.split(secret).join('***'), text);
-  const walk = (node: unknown): unknown => {
-    if (typeof node === 'string') return replace(node);
-    if (Array.isArray(node)) return node.map(walk);
-    if (node && typeof node === 'object') {
-      return Object.fromEntries(
-        Object.entries(node).map(([key, item]) => [key, walk(item)]),
-      );
-    }
-    return node;
+/**
+ * Masks the given secret values in the diagnostic fields of a run result:
+ * the error, the failed test title and the console. Structural fields
+ * (status, location, links) are left intact — they are the contract.
+ */
+export function maskSecrets(
+  result: ScenarioRunResponse,
+  secrets: string[],
+): ScenarioRunResponse {
+  // Longest first, so a secret containing another is masked whole.
+  const values = secrets.filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!values.length) return result;
+  const mask = <T extends string | null | undefined>(text: T): T =>
+    typeof text === 'string'
+      ? (values.reduce(
+          (acc, secret) => acc.split(secret).join('***'),
+          text,
+        ) as T)
+      : text;
+  return {
+    ...result,
+    error: mask(result.error),
+    failed_test: mask(result.failed_test),
+    console:
+      result.console?.map((entry) => ({
+        ...entry,
+        text: mask(entry.text) ?? '',
+      })) ?? null,
   };
-  return walk(value) as T;
 }

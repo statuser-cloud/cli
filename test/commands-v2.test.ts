@@ -158,6 +158,14 @@ describe('reports', { timeout: 30_000 }, () => {
   });
 });
 
+const updatePlan = {
+  features: {
+    ssl_monitoring_enabled: true,
+    min_check_interval_seconds: 60,
+    available_locations: ['msk-1'],
+  },
+};
+
 describe('servers update', { timeout: 30_000 }, () => {
   const list = [
     httpServer(),
@@ -167,7 +175,14 @@ describe('servers update', { timeout: 30_000 }, () => {
 
   it('patches only what changes and skips what does not apply', async () => {
     const result = await cli(
-      (r) => ({ body: r.method === 'GET' ? list : {} }),
+      (r) => ({
+        body:
+          r.path === '/v1/billing/current-plan'
+            ? updatePlan
+            : r.method === 'GET'
+              ? list
+              : {},
+      }),
       ['servers', 'update', '--project', '100000', '--ssl', '--json'],
     );
     expect(result.code).toBe(0);
@@ -181,7 +196,9 @@ describe('servers update', { timeout: 30_000 }, () => {
 
   it('writes nothing on --dry-run', async () => {
     const result = await cli(
-      () => ({ body: list }),
+      (r) => ({
+        body: r.path === '/v1/billing/current-plan' ? updatePlan : list,
+      }),
       ['servers', 'update', '1', '--interval', '120', '--dry-run'],
     );
     expect(result.code).toBe(0);
@@ -281,7 +298,7 @@ describe('export / diff / apply', { timeout: 30_000 }, () => {
 
   it('refuses a protocol change before any write', async () => {
     const file = configFile([
-      { id: 1, name: 'Site', protocol: 'ping', host: 'x' },
+      { id: 1, name: 'Site', protocol: 'ping', host: 'x.example.com' },
     ]);
     const result = await cli(api, ['apply', '-c', file]);
     expect(result.code).toBe(2);

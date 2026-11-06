@@ -107,7 +107,7 @@ export function registerMaintenanceCommands(program: Command): void {
       if (!current) {
         throw new StatuserApiError(
           404,
-          `planned maintenance ${id} not found`,
+          t.notFound(id),
           'status_page_planned_maintenance_not_found',
         );
       }
@@ -126,19 +126,26 @@ export function registerMaintenanceCommands(program: Command): void {
       }
 
       // Changing the date alone adds nothing to the timeline and notifies
-      // nobody; a message does both.
-      if (opts.message) {
+      // nobody; a message does both. The same message already in the
+      // timeline means a retried step: subscribers are not told twice.
+      const message = opts.message?.trim();
+      const alreadyPosted =
+        !!message &&
+        current.updates.some((update) => update.message.trim() === message);
+      if (message && !alreadyPosted) {
         try {
           await client.call({
             method: 'POST',
             path: `${base}/${id}/updates`,
-            body: { message: opts.message },
+            body: { message },
           });
         } catch (error) {
-          const message =
-            error instanceof StatuserApiError ? error.format() : String(error);
           throw new CliError(
-            t.maintenanceMessageFailed(message),
+            t.maintenanceMessageFailed(
+              error instanceof StatuserApiError
+                ? error.format()
+                : String(error),
+            ),
             error instanceof StatuserApiError
               ? error.exitCode
               : ExitCode.Failure,

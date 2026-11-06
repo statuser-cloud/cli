@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { CliError, ExitCode } from '../errors.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
+import { jsonErrorPosition } from '../json-error.js';
 
 // Mirrors the backend limits (`scenario.constants.ts`, `LocationCode`): the
 // whole config is checked before the first write, so a typo in the fifth
@@ -42,6 +43,8 @@ export const SCENARIO_DEFAULT_INTERVAL = 300;
 export const SCENARIO_DEFAULT_LOCATION = 'msk-1';
 
 export const SCENARIO_SCRIPT_MAX_BYTES = 64 * 1024;
+// `MaxLength` of a server name in the API.
+const SCENARIO_NAME_MAX = 150;
 // Same check as `assertScenarioScript` in the backend.
 export const SCENARIO_HAS_TEST = /\btest(?:\.\w+)?\s*\(/;
 const ENV_MAX_VARS = 20;
@@ -111,7 +114,7 @@ export async function loadScenarioConfig(
   try {
     raw = JSON.parse(text);
   } catch (error) {
-    return fail(t.cfgJson((error as Error).message));
+    return fail(t.cfgJson(jsonErrorPosition(error)));
   }
   if (!isObject(raw)) return fail(t.cfgObject);
   if (!isPositiveInt(raw.project_id)) {
@@ -138,6 +141,9 @@ export async function loadScenarioConfig(
 
     const name = typeof item.name === 'string' ? item.name.trim() : '';
     if (!name) return fail(`${at}.name: ${t.cfgRequired}`);
+    if (name.length > SCENARIO_NAME_MAX) {
+      return fail(`${at}.name: ${t.cfgMaxLength(SCENARIO_NAME_MAX)}`);
+    }
     if (names.has(name)) return fail(`${at}.name: ${t.cfgDuplicate(name)}`);
     names.add(name);
 

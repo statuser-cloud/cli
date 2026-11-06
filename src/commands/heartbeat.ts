@@ -61,13 +61,21 @@ export function registerHeartbeatCommands(program: Command): void {
       const token = await resolveToken(command, opts);
       const client = await anonymousClient(command);
 
-      const exitCode = await runChild(file, args);
+      // With --json stdout carries only our report, so the command's own
+      // output goes to stderr.
+      const json = !!globalOptions(command).json;
+      const exitCode = await runChild(file, args, json);
+      let delivered = true;
       try {
         await sendHeartbeat(client, token, exitCode !== 0);
       } catch (error) {
         // The command's own result wins: a backup that succeeded must not
         // turn into a failed CI step because the ping did not get through.
+        delivered = false;
         printErr(t.heartbeatSendFailed(describe(error)));
+      }
+      if (json) {
+        printJson({ exit_code: exitCode, fail: exitCode !== 0, delivered });
       }
       process.exitCode = exitCode;
     });
@@ -142,11 +150,15 @@ async function sendHeartbeat(
  * shared — Ctrl+C already reaches every process, and a separate group could
  * not read the terminal.
  */
-function runChild(file: string, args: string[]): Promise<number> {
+function runChild(
+  file: string,
+  args: string[],
+  stdoutToStderr: boolean,
+): Promise<number> {
   return new Promise((resolve) => {
     const ownGroup = process.platform !== 'win32' && !process.stdin.isTTY;
     const child = spawn(file, args, {
-      stdio: 'inherit',
+      stdio: stdoutToStderr ? ['inherit', 2, 'inherit'] : 'inherit',
       shell: false,
       detached: ownGroup,
     });
