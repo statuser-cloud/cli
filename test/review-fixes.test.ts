@@ -600,3 +600,32 @@ describe('twelfth review round', () => {
     expect(server!.requests).toHaveLength(0);
   });
 });
+
+describe('thirteenth review round', () => {
+  it('masks a secret the runner cut from the start', () => {
+    const secret = 'S'.repeat(10) + 'tail-of-the-secret';
+    const masked = maskSecrets(
+      { error: 'tail-of-the-secret\nError: boom', console: null },
+      [secret],
+    );
+    expect(masked.error).toBe('***\nError: boom');
+  });
+
+  it('refuses an unknown --protocol before any request', async () => {
+    const result = await cli(
+      () => ({ body: [] }),
+      [
+        'servers',
+        'update',
+        '--project',
+        '100000',
+        '--protocol',
+        'htttp',
+        '--interval',
+        '120',
+      ],
+    );
+    expect(result.code).toBe(2);
+    expect(server?.requests ?? []).toHaveLength(0);
+  });
+});

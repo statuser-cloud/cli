@@ -12,7 +12,7 @@ import {
   planServerPatch,
   type BulkChange,
 } from '../servers-update.js';
-import { isSecretHeader } from '../servers-config/fields.js';
+import { isSecretHeader, MANAGED_PROTOCOLS } from '../servers-config/fields.js';
 import { patchPlanProblem } from '../servers-config/plan.js';
 import { describeWriteFailure } from '../write-failure.js';
 
@@ -73,7 +73,7 @@ export function registerServersCommands(program: Command): void {
     .command('list')
     .description(t.cmdServersList)
     .option('--project <id>', t.optProject, parseId)
-    .option('--protocol <protocol>', t.optProtocol)
+    .option('--protocol <protocol>', t.optProtocol, parseProtocol)
     .action(
       async (
         opts: { project?: number; protocol?: string },
@@ -185,7 +185,7 @@ export function registerServersCommands(program: Command): void {
     .description(t.cmdServersUpdate)
     .argument('[ids...]', 'id')
     .option('--project <id>', t.optProject, parseId)
-    .option('--protocol <protocol>', t.optProtocol)
+    .option('--protocol <protocol>', t.optProtocol, parseProtocol)
     .option('--interval <seconds>', t.optInterval, parseNonNegative)
     .option('--timeout <seconds>', t.optRequestTimeout, parseNonNegative)
     .option('--regions <codes>', t.optRegions)
@@ -475,4 +475,17 @@ async function readPausedIds(path: string): Promise<number[]> {
     // Reported below with the file name.
   }
   throw new CliError(t.fromFileInvalid(path), ExitCode.Usage);
+}
+
+const PROTOCOLS: Array<Server['protocol']> = [...MANAGED_PROTOCOLS, 'scenario'];
+
+/** A typo would filter out every server and report an empty success. */
+function parseProtocol(raw: string): string {
+  if (!PROTOCOLS.includes(raw as Server['protocol'])) {
+    throw new CliError(
+      `--protocol: ${t.cfgOneOf(PROTOCOLS.join(', '))}`,
+      ExitCode.Usage,
+    );
+  }
+  return raw;
 }

@@ -317,6 +317,19 @@ function maskText(text: string, values: string[]): string {
     ) {
       ranges.push([at, at + value.length]);
     }
+    // The runner keeps only the last part of a long error, without a mark:
+    // a value cut at the start shows as its tail. Four characters at least,
+    // so a common last letter does not mask the start of every line.
+    for (
+      let length = Math.min(value.length - 1, body.length);
+      length >= 4;
+      length -= 1
+    ) {
+      if (body.startsWith(value.slice(-length))) {
+        ranges.push([0, length]);
+        break;
+      }
+    }
     if (cut) {
       for (
         let length = Math.min(value.length - 1, body.length);
