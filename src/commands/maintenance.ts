@@ -7,6 +7,7 @@ import { t } from '../i18n.js';
 import { printJson, printLine } from '../output.js';
 import { pageServerIds } from '../status-page.js';
 import { parseId } from './servers.js';
+import { textLength } from '../text-length.js';
 
 type Maintenance =
   components['schemas']['StatusPagePlannedMaintenanceResponseDto'];
@@ -90,7 +91,7 @@ export function registerMaintenanceCommands(program: Command): void {
       // the PATCH would leave the window closed without its announcement.
       if (opts.message !== undefined) {
         const text = opts.message.trim();
-        if (!text || text.length > MESSAGE_MAX_LENGTH) {
+        if (!text || textLength(text) > MESSAGE_MAX_LENGTH) {
           throw new CliError(
             t.messageInvalid(MESSAGE_MAX_LENGTH),
             ExitCode.Usage,

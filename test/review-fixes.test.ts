@@ -5,6 +5,7 @@ import { redactReplay } from '../src/commands/incidents.js';
 import { maskSecrets } from '../src/commands/scenarios.js';
 import { localizeError } from '../src/commander-i18n.js';
 import { loadScenarioConfig } from '../src/scenarios/config.js';
+import { buildDeployPlan } from '../src/scenarios/plan.js';
 import { CliError } from '../src/errors.js';
 import { parseServersSection } from '../src/servers-config/parse.js';
 import { checkScenarioLimits } from '../src/servers-config/plan.js';
@@ -496,5 +497,39 @@ describe('eighth review round', () => {
       ['incidents', 'list', '--since', '1000000000d'],
     );
     expect(result.code).toBe(2);
+  });
+});
+
+describe('ninth review round', () => {
+  it('lets a scenario with a duplicate script saved earlier be renamed', () => {
+    const existing = [10, 11].map((id) => ({
+      id,
+      name: `S${id}`,
+      project_id: 100000,
+      protocol: 'scenario',
+      scenario_script: 'test("a", async () => {})',
+      scenario_env_keys: [],
+      check_interval: 600,
+      request_timeout: 30,
+      locations: ['msk-1'],
+    }));
+    const plan = buildDeployPlan(
+      {
+        projectId: 100000,
+        scenarios: [
+          {
+            id: 10,
+            name: 'Renamed',
+            file: 'a.spec.ts',
+            script: 'test("a", async () => {})',
+            interval: 600,
+            timeout: 30,
+            location: 'msk-1',
+          },
+        ],
+      } as never,
+      existing as never,
+    );
+    expect(plan.steps[0]).toMatchObject({ kind: 'update', fields: ['name'] });
   });
 });

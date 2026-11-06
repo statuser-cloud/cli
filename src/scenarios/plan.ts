@@ -49,13 +49,6 @@ export function buildDeployPlan(
   const scenarios = servers.filter((s) => s.protocol === 'scenario');
   const inProject = scenarios.filter((s) => s.project_id === config.projectId);
 
-  const byScript = new Map<string, DesiredScenario>();
-  for (const scenario of config.scenarios) {
-    const other = byScript.get(scenario.script);
-    if (other) fail(t.deployDuplicateScript(other.name, scenario.name));
-    byScript.set(scenario.script, scenario);
-  }
-
   const matched = new Map<DesiredScenario, ScenarioServer | undefined>();
   const claimed = new Set<number>();
   for (const scenario of config.scenarios) {
@@ -73,7 +66,21 @@ export function buildDeployPlan(
     matched.set(scenario, server);
   }
 
+  // The backend checks the script only when it is set: on a create or a
+  // real change. Duplicates saved earlier stay editable, as on the API.
+  const writesScript = (scenario: DesiredScenario) =>
+    matched.get(scenario)?.scenario_script !== scenario.script;
+  const byScript = new Map<string, DesiredScenario>();
   for (const scenario of config.scenarios) {
+    const other = byScript.get(scenario.script);
+    if (other && (writesScript(other) || writesScript(scenario))) {
+      fail(t.deployDuplicateScript(other.name, scenario.name));
+    }
+    byScript.set(scenario.script, scenario);
+  }
+
+  for (const scenario of config.scenarios) {
+    if (!writesScript(scenario)) continue;
     const own = matched.get(scenario);
     const holder = scenarios.find(
       (s) => s.scenario_script === scenario.script && s.id !== own?.id,

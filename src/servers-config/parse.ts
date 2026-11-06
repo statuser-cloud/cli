@@ -1,5 +1,6 @@
 import { t } from '../i18n.js';
 import { HOST_PATTERN } from './host-pattern.js';
+import { textLength } from '../text-length.js';
 import { resolveEnvValue } from '../scenarios/config.js';
 import {
   fieldsFor,
@@ -123,7 +124,7 @@ export function parseServersSection(
     if (entry.name !== undefined && entry.name !== null && name === null) {
       return fail(`${at}.name: ${t.cfgNonEmptyString}`);
     }
-    if (name !== null && name.length > NAME_MAX) {
+    if (name !== null && textLength(name) > NAME_MAX) {
       return fail(`${at}.name: ${t.cfgMaxLength(NAME_MAX)}`);
     }
     if (name === null && entry.id === undefined) {
@@ -159,7 +160,7 @@ export function parseServersSection(
         if (key !== 'llm_api_key' && AUTH_CONTROL.test(resolved)) {
           return fail(`${at}.${key}: ${t.cfgControlChars}`);
         }
-        if (resolved.length > SECRET_MAX[key]!) {
+        if (textLength(resolved) > SECRET_MAX[key]!) {
           return fail(`${at}.${key}: ${t.cfgMaxLength(SECRET_MAX[key]!)}`);
         }
         secrets[key] = resolved;
@@ -244,7 +245,9 @@ function checkField(
     // The login goes to the API as written, and its length is checked
     // there untrimmed.
     const length =
-      key === 'http_auth_username' ? value.length : value.trim().length;
+      key === 'http_auth_username'
+        ? textLength(value)
+        : textLength(value.trim());
     return typeof max === 'number' && length > max ? t.cfgMaxLength(max) : null;
   }
   if (ENUMS[key]) {

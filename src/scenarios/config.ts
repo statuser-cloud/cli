@@ -4,6 +4,7 @@ import { CliError, ExitCode } from '../errors.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
 import { jsonErrorPosition } from '../json-error.js';
+import { textLength } from '../text-length.js';
 
 // Mirrors the backend limits (`scenario.constants.ts`, `LocationCode`): the
 // whole config is checked before the first write, so a typo in the fifth
@@ -141,7 +142,7 @@ export async function loadScenarioConfig(
 
     const name = typeof item.name === 'string' ? item.name.trim() : '';
     if (!name) return fail(`${at}.name: ${t.cfgRequired}`);
-    if (name.length > SCENARIO_NAME_MAX) {
+    if (textLength(name) > SCENARIO_NAME_MAX) {
       return fail(`${at}.name: ${t.cfgMaxLength(SCENARIO_NAME_MAX)}`);
     }
     if (names.has(name)) return fail(`${at}.name: ${t.cfgDuplicate(name)}`);

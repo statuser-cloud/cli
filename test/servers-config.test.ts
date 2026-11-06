@@ -609,3 +609,29 @@ describe('third review round', () => {
     ).not.toThrow();
   });
 });
+
+describe('ninth review round', () => {
+  it('stops a request the API would refuse as too large before any write', () => {
+    const desired = parse([
+      { id: 1, name: 'Site', protocol: 'http', description: 'new' },
+      {
+        name: 'Big',
+        protocol: 'http',
+        host: 'https://a.example.com',
+        http_method: 'post',
+        body: 'x'.repeat(11 * 1024 * 1024),
+      },
+    ]);
+    expect(() =>
+      buildServersPlan(desired, 100000, [server()], features),
+    ).toThrow(/МБ|MB/);
+  });
+
+  it('counts an emoji in a name once, as the API does', () => {
+    expect(() =>
+      parse([
+        { name: `${'a'.repeat(149)}😀`, protocol: 'ping', host: '8.8.8.8' },
+      ]),
+    ).not.toThrow();
+  });
+});

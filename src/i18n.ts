@@ -367,6 +367,8 @@ const ru = {
     `Тариф разрешает сценариев: ${limit}. Уже есть ${existing}, файл добавляет ${creating}.`,
   applyScenarioTimeoutTooHigh: (name: string, max: number) =>
     `«${name}»: таймаут сценария на этом тарифе — не больше ${max} с.`,
+  applyRequestTooLarge: (at: string, max: number) =>
+    `${at}: запрос больше ${max / 1024 / 1024} МБ — API его не примет`,
   applyUnknownOutcome: (name: string, message: string) =>
     `Нет ответа на запись «${name}» (${message}): неизвестно, применилась ли она. Запустите statuser diff и повторите apply.`,
 
@@ -768,6 +770,8 @@ const en: Messages = {
     `The plan allows ${limit} scenarios. There are ${existing}; the file adds ${creating}.`,
   applyScenarioTimeoutTooHigh: (name, max) =>
     `“${name}”: the scenario timeout on this plan is at most ${max} s.`,
+  applyRequestTooLarge: (at, max) =>
+    `${at}: the request is over ${max / 1024 / 1024} MB, the API refuses it`,
   applyUnknownOutcome: (name, message) =>
     `No response to the write of “${name}” (${message}): whether it was applied is unknown. Run statuser diff and repeat apply.`,
 

@@ -76,6 +76,7 @@ export function buildServersPlan(
   }
 
   checkHosts(steps);
+  checkRequestSize(steps);
   checkAuth(steps, byId);
   checkLlm(steps, byId);
   checkDuplicates(steps, account);
@@ -234,6 +235,20 @@ function checkHosts(steps: ServerStep[]): void {
     const host = step.body.host;
     if (typeof host === 'string' && isForbiddenHost(host)) {
       fail(`${step.entry.at}.host: ${t.cfgHostInternal}`);
+    }
+  }
+}
+
+// The API's JSON body limit (`main.ts`); a larger request is refused
+// before validation, after the writes ahead of it in the plan.
+const MAX_REQUEST_BYTES = 10 * 1024 * 1024;
+
+function checkRequestSize(steps: ServerStep[]): void {
+  for (const step of steps) {
+    if (step.kind === 'unchanged') continue;
+    const bytes = Buffer.byteLength(JSON.stringify(step.body), 'utf8');
+    if (bytes > MAX_REQUEST_BYTES) {
+      fail(t.applyRequestTooLarge(step.entry.at, MAX_REQUEST_BYTES));
     }
   }
 }
