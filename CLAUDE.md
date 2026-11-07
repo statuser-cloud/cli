@@ -98,6 +98,21 @@ version.
 - Docs recommend environment variables over flags for secrets: arguments are
   visible in the process list.
 
+## Completion and install scripts
+
+- `statuser completion bash|zsh|fish` is generated from the live commander
+  tree (`src/completion.ts`): a new command or flag is completed without
+  touching it. Values offered after a flag live in the `VALUES` map there,
+  keyed by `<command path> <flag>` or by the flag alone.
+- In the zsh script the command path variable must not be called `path`:
+  zsh ties `path` to `$PATH`, and a local `path` breaks command lookup
+  inside the completion function. It is `cmdpath` in all three shells.
+- `install.sh` and `install.ps1` must stay in sync with the release asset
+  names built by `binaries.yml`: `statuser-<os>-<arch>.tar.gz` with
+  `statuser` inside, `statuser-windows-x64.zip` with `statuser.exe`, and
+  `SHA256SUMS`. `verify-install` in `publish.yml` runs both scripts against
+  every release.
+
 ## Before a PR
 
 Run what CI runs:

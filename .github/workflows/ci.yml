@@ -73,3 +73,17 @@ jobs:
       - name: Test the binary
         run: STATUSER_TEST_BINARY=build/statuser-linux-x64 npm test
 
+  install-script:
+    # install.sh is piped into whatever /bin/sh the user has, so it is parsed
+    # by dash (ubuntu's sh) and linted as POSIX sh, not as bash.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Syntax
+        run: sh -n install.sh
+
+      - name: ShellCheck
+        run: shellcheck install.sh
+
