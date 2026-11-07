@@ -76,7 +76,7 @@ export function buildServersPlan(
       }
       steps.push(diffServer(entry, server));
     } else {
-      steps.push(createStep(entry, projectId));
+      steps.push(createStep(entry, projectId, features));
     }
   }
 
@@ -162,7 +162,11 @@ function diffServer(entry: DesiredServer, server: Server): ServerStep {
   return { kind: 'update', entry, serverId: server.id, fields, body };
 }
 
-function createStep(entry: DesiredServer, projectId: number): ServerStep {
+function createStep(
+  entry: DesiredServer,
+  projectId: number,
+  features: PlanFeatures,
+): ServerStep {
   const f = entry.fields;
   const warnings: string[] = [];
   if (entry.protocol !== 'heartbeat' && !f.host) {
@@ -208,6 +212,11 @@ function createStep(entry: DesiredServer, projectId: number): ServerStep {
       check_interval: 300,
       is_ssl_check: false,
       is_domain_check: false,
+      // Without locations the API stores its own default (Moscow and
+      // St Petersburg) without checking the plan; on Free they are not
+      // available, and every later edit of the server would be refused.
+      // The panel sends all locations of the plan, and so does this.
+      locations: features.available_locations,
       // HEAD has no body, so a keyword check needs GET to see the page.
       ...(isHttp && {
         http_method: entry.protocol === 'keyword' ? 'get' : 'head',

@@ -491,3 +491,29 @@ describe('scenarios run secrets', { timeout: 30_000 }, () => {
     expect(result.stderr).toContain('OTHER');
   });
 });
+
+describe('free plan defaults', { timeout: 30_000 }, () => {
+  it('creates with the locations of the plan, not the API default', async () => {
+    const free = {
+      features: {
+        servers_limit: 5,
+        min_check_interval_seconds: 300,
+        available_locations: ['ala-1', 'ams-1'],
+      },
+    };
+    const result = await cli(
+      (r) => {
+        if (r.path === '/v1/billing/current-plan') return { body: free };
+        if (r.path === '/v1/projects') return { body: [{ id: 100000 }] };
+        if (r.method === 'GET') return { body: [] };
+        return { body: { id: 7 } };
+      },
+      ['servers', 'add', 'https://api.example.com'],
+    );
+    expect(result.code).toBe(0);
+    expect(server!.requests.at(-1)!.body).toMatchObject({
+      locations: ['ala-1', 'ams-1'],
+      check_interval: 300,
+    });
+  });
+});
