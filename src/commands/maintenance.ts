@@ -4,7 +4,9 @@ import { parseDuration } from '../duration.js';
 import { CliError, ExitCode, StatuserApiError } from '../errors.js';
 import type { components } from '../generated/openapi.js';
 import { t } from '../i18n.js';
-import { printJson, printLine } from '../output.js';
+import type { StatuserClient } from '../client.js';
+import { confirmDeletion } from '../confirm.js';
+import { formatTime, printJson, printLine, printTable } from '../output.js';
 import { pageServerIds } from '../status-page.js';
 import { parseId } from './servers.js';
 import { textLength } from '../text-length.js';
@@ -23,6 +25,10 @@ interface StartOptions {
   for: string;
   servers?: string;
   allServers?: boolean;
+}
+
+interface ScheduleOptions extends StartOptions {
+  at: string;
 }
 
 interface EndOptions {
@@ -51,34 +57,117 @@ export function registerMaintenanceCommands(program: Command): void {
     .option('--for <duration>', t.optFor, DEFAULT_WINDOW)
     .action(async (opts: StartOptions, command: Command) => {
       const windowMs = parseDuration(opts.for);
-      if (opts.servers && opts.allServers) {
-        throw new CliError(t.maintenanceBothServers, ExitCode.Usage);
-      }
-      let serverIds = (opts.servers ?? '')
-        .split(',')
-        .map((raw) => raw.trim())
-        .filter(Boolean)
-        .map(parseId);
-      if (!serverIds.length && !opts.allServers) {
-        throw new CliError(t.maintenanceNoServers, ExitCode.Usage);
-      }
+      const servers = pickServers(opts);
       const { client } = await authedClient(command);
-      if (opts.allServers) serverIds = await pageServerIds(client, opts.page);
       const now = new Date();
-      const created = await client.call<Maintenance>({
-        method: 'POST',
-        path: `/v1/status-pages/${opts.page}/planned-maintenances`,
-        body: {
-          title: opts.title,
-          description: opts.description,
-          started_at: now.toISOString(),
-          ended_at: new Date(now.getTime() + windowMs).toISOString(),
-          servers: serverIds.map((id) => ({ id })),
-        },
-      });
+      const created = await createMaintenance(
+        client,
+        opts,
+        servers,
+        now,
+        windowMs,
+      );
       if (globalOptions(command).json) printJson(created);
       else printLine(t.maintenanceStarted(created.id, created.ended_at));
     });
+
+  maintenance
+    .command('schedule')
+    .description(t.cmdMaintenanceSchedule)
+    .requiredOption('--page <id>', t.optPage, parseId)
+    .requiredOption('--at <datetime>', t.optAt)
+    .requiredOption('--title <title>', t.optTitle)
+    .requiredOption('--description <text>', t.optDescription)
+    .option('--servers <ids>', t.optServers)
+    .option('--all-servers', t.optAllServers)
+    .option('--for <duration>', t.optFor, DEFAULT_WINDOW)
+    .action(async (opts: ScheduleOptions, command: Command) => {
+      const windowMs = parseDuration(opts.for);
+      // A start in the past would announce what already happened; work
+      // going on now is opened by `start`.
+      const start = Date.parse(opts.at);
+      if (Number.isNaN(start) || start <= Date.now()) {
+        throw new CliError(t.maintenanceAtInvalid(opts.at), ExitCode.Usage);
+      }
+      const servers = pickServers(opts);
+      const { client } = await authedClient(command);
+      const created = await createMaintenance(
+        client,
+        opts,
+        servers,
+        new Date(start),
+        windowMs,
+      );
+      if (globalOptions(command).json) printJson(created);
+      else {
+        printLine(
+          t.maintenanceScheduled(
+            created.id,
+            formatTime(created.started_at),
+            formatTime(created.ended_at),
+          ),
+        );
+      }
+    });
+
+  maintenance
+    .command('list')
+    .description(t.cmdMaintenanceList)
+    .requiredOption('--page <id>', t.optPage, parseId)
+    .action(async (opts: { page: number }, command: Command) => {
+      const { client } = await authedClient(command);
+      const list = await client.call<Maintenance[]>({
+        method: 'GET',
+        path: `/v1/status-pages/${opts.page}/planned-maintenances`,
+      });
+      if (globalOptions(command).json) {
+        printJson(list);
+        return;
+      }
+      if (!list.length) {
+        printLine(t.maintenanceEmpty);
+        return;
+      }
+      printTable(
+        [t.colId, t.colTitle, t.colStarted, t.colEnd],
+        list.map((item) => [
+          item.id,
+          item.title,
+          formatTime(item.started_at),
+          formatTime(item.ended_at),
+        ]),
+      );
+    });
+
+  maintenance
+    .command('delete')
+    .description(t.cmdMaintenanceDelete)
+    .argument('<maintenanceId>', 'id', parseId)
+    .requiredOption('--page <id>', t.optPage, parseId)
+    .option('--yes', t.optYes)
+    .action(
+      async (
+        id: number,
+        opts: { page: number; yes?: boolean },
+        command: Command,
+      ) => {
+        const { client } = await authedClient(command);
+        const base = `/v1/status-pages/${opts.page}/planned-maintenances`;
+        const current = (
+          await client.call<Maintenance[]>({ method: 'GET', path: base })
+        ).find((item) => item.id === id);
+        if (!current) {
+          throw new StatuserApiError(404, t.notFound(id), 'not_found');
+        }
+        await confirmDeletion(
+          t.confirmDeleteMaintenance(id, current.title),
+          opts.yes,
+        );
+        await client.call({ method: 'DELETE', path: `${base}/${id}` });
+        if (globalOptions(command).json) printJson({ deleted: true, id });
+        else printLine(t.deletedOne(id));
+      },
+    );
 
   maintenance
     .command('end')
@@ -162,4 +251,41 @@ export function registerMaintenanceCommands(program: Command): void {
         );
       }
     });
+}
+
+/** The servers named on the command line, or `all` for the whole page. */
+function pickServers(opts: StartOptions): number[] | 'all' {
+  if (opts.servers && opts.allServers) {
+    throw new CliError(t.maintenanceBothServers, ExitCode.Usage);
+  }
+  if (opts.allServers) return 'all';
+  const ids = (opts.servers ?? '')
+    .split(',')
+    .map((raw) => raw.trim())
+    .filter(Boolean)
+    .map(parseId);
+  if (!ids.length) throw new CliError(t.maintenanceNoServers, ExitCode.Usage);
+  return ids;
+}
+
+async function createMaintenance(
+  client: StatuserClient,
+  opts: StartOptions,
+  servers: number[] | 'all',
+  start: Date,
+  windowMs: number,
+): Promise<Maintenance> {
+  const serverIds =
+    servers === 'all' ? await pageServerIds(client, opts.page) : servers;
+  return client.call<Maintenance>({
+    method: 'POST',
+    path: `/v1/status-pages/${opts.page}/planned-maintenances`,
+    body: {
+      title: opts.title,
+      description: opts.description,
+      started_at: start.toISOString(),
+      ended_at: new Date(start.getTime() + windowMs).toISOString(),
+      servers: serverIds.map((id) => ({ id })),
+    },
+  });
 }

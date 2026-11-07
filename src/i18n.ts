@@ -491,6 +491,30 @@ const ru = {
   colPublished: 'Опубликована',
   yes: 'да',
   no: 'нет',
+  cmdScenariosRun:
+    'прогнать сохранённый сценарий сейчас — как по расписанию, с инцидентом при сбое',
+  scenarioEnvUnmasked: (names: string) =>
+    `Значения переменных сценария (${names}) CLI не знает и в выводе не скроет: задайте их в окружении под теми же именами.`,
+  scenarioNotScenario: (id: number, protocol: string) =>
+    `#${id} — не сценарий, а ${protocol}.`,
+  cmdServersChecks: 'проверки сервера за период',
+  optChecksSince: 'с какого момента: 24h, 7d или дата (по умолчанию сутки)',
+  optChecksUntil: 'по какой момент: 24h, 7d или дата',
+  checksEmpty: 'Проверок за этот период нет.',
+  colTime: 'Время',
+  colLocations: 'Локации',
+  cmdMaintenanceSchedule: 'объявить плановые работы заранее',
+  cmdMaintenanceList: 'плановые работы страницы',
+  cmdMaintenanceDelete: 'удалить плановые работы со страницы',
+  optAt: 'начало: дата и время, например 2026-11-20T03:00+03:00',
+  maintenanceAtInvalid: (raw: string) =>
+    `--at: не дата или уже прошло: ${raw}. Работы, которые идут сейчас, открывает maintenance start.`,
+  maintenanceScheduled: (id: number, start: string, end: string) =>
+    `Плановые работы #${id} объявлены: ${start} — ${end}.`,
+  maintenanceEmpty: 'Плановых работ нет.',
+  confirmDeleteMaintenance: (id: number, title: string) =>
+    `Удалить плановые работы «${title}» (#${id}) со страницы? [y/N] `,
+  colEnd: 'Конец',
 };
 
 export type Messages = typeof ru;
@@ -942,6 +966,30 @@ const en: Messages = {
   colPublished: 'Published',
   yes: 'yes',
   no: 'no',
+  cmdScenariosRun:
+    'run a saved scenario now — as on schedule, with an incident on failure',
+  scenarioEnvUnmasked: (names) =>
+    `The CLI does not know the values of the scenario variables (${names}) and cannot hide them in the output: set them in the environment under the same names.`,
+  scenarioNotScenario: (id, protocol) =>
+    `#${id} is not a scenario but ${protocol}.`,
+  cmdServersChecks: 'checks of a server over a period',
+  optChecksSince: 'from: 24h, 7d or a date (default: a day)',
+  optChecksUntil: 'until: 24h, 7d or a date',
+  checksEmpty: 'No checks in this period.',
+  colTime: 'Time',
+  colLocations: 'Locations',
+  cmdMaintenanceSchedule: 'announce planned maintenance in advance',
+  cmdMaintenanceList: 'planned maintenance of a page',
+  cmdMaintenanceDelete: 'remove planned maintenance from a page',
+  optAt: 'start: a date and time, e.g. 2026-11-20T03:00+03:00',
+  maintenanceAtInvalid: (raw) =>
+    `--at: not a date or already past: ${raw}. Maintenance going on now is opened by maintenance start.`,
+  maintenanceScheduled: (id, start, end) =>
+    `Planned maintenance #${id} announced: ${start} — ${end}.`,
+  maintenanceEmpty: 'No planned maintenance.',
+  confirmDeleteMaintenance: (id, title) =>
+    `Remove planned maintenance "${title}" (#${id}) from the page? [y/N] `,
+  colEnd: 'End',
 };
 
 const dictionaries: Record<Lang, Messages> = { ru, en };

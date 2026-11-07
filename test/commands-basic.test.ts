@@ -315,3 +315,179 @@ describe('review of basic commands', { timeout: 30_000 }, () => {
     expect(writes(server!)).toEqual([]);
   });
 });
+
+describe(
+  'scenarios run, maintenance schedule, servers checks',
+  { timeout: 30_000 },
+  () => {
+    const scenario = {
+      ...existing,
+      id: 9,
+      protocol: 'scenario',
+      request_timeout: 30,
+    };
+
+    it('runs a saved scenario and exits 4 when it fails', async () => {
+      const result = await cli(
+        (r) =>
+          r.method === 'GET'
+            ? { body: scenario }
+            : { body: { status: 'failed', error: 'boom', failed_test: 't' } },
+        ['scenarios', 'run', '9'],
+      );
+      expect(result.code).toBe(4);
+      expect(writes(server!)).toEqual(['POST /v1/servers/9/scenario-run']);
+    });
+
+    it('refuses to run a server that is not a scenario', async () => {
+      const result = await cli(
+        () => ({ body: existing }),
+        ['scenarios', 'run', '1'],
+      );
+      expect(result.code).toBe(2);
+      expect(writes(server!)).toEqual([]);
+    });
+
+    it('schedules maintenance at a future time', async () => {
+      const at = new Date(Date.now() + 86_400_000).toISOString();
+      const result = await cli(
+        (r) => ({
+          body:
+            r.method === 'POST'
+              ? { id: 3, started_at: at, ended_at: at, title: 't', updates: [] }
+              : {},
+        }),
+        [
+          'maintenance',
+          'schedule',
+          '--page',
+          '12',
+          '--at',
+          at,
+          '--for',
+          '2h',
+          '--title',
+          'DB',
+          '--description',
+          'Moving',
+          '--servers',
+          '5',
+        ],
+      );
+      expect(result.code).toBe(0);
+      const body = server!.requests.at(-1)!.body as Record<string, string>;
+      expect(body.started_at).toBe(at);
+      expect(Date.parse(body.ended_at) - Date.parse(at)).toBe(7_200_000);
+    });
+
+    it('refuses a start in the past', async () => {
+      const result = await cli(
+        () => ({ body: {} }),
+        [
+          'maintenance',
+          'schedule',
+          '--page',
+          '12',
+          '--at',
+          '2020-01-01T00:00Z',
+          '--title',
+          'DB',
+          '--description',
+          'Moving',
+          '--servers',
+          '5',
+        ],
+      );
+      expect(result.code).toBe(2);
+      expect(server?.requests ?? []).toHaveLength(0);
+    });
+
+    it('deletes maintenance only with --yes outside a terminal', async () => {
+      const handler: Handler = (r) => ({
+        body: r.method === 'GET' ? [{ id: 3, title: 'DB' }] : {},
+      });
+      const refused = await cli(handler, [
+        'maintenance',
+        'delete',
+        '3',
+        '--page',
+        '12',
+      ]);
+      expect(refused.code).toBe(2);
+      expect(writes(server!)).toEqual([]);
+      const done = await cli(handler, [
+        'maintenance',
+        'delete',
+        '3',
+        '--page',
+        '12',
+        '--yes',
+      ]);
+      expect(done.code).toBe(0);
+      expect(writes(server!)).toEqual([
+        'DELETE /v1/status-pages/12/planned-maintenances/3',
+      ]);
+    });
+
+    it('servers checks prints status per location', async () => {
+      const result = await cli(
+        () => ({
+          body: [
+            {
+              group_id: 'g',
+              group_checked_at: '2026-11-07T10:00:00Z',
+              locations: [
+                {
+                  location: 'msk-1',
+                  status: 'online',
+                  latency: 120,
+                  checked_at: '',
+                },
+                {
+                  location: 'spb-1',
+                  status: 'offline',
+                  latency: 0,
+                  checked_at: '',
+                },
+              ],
+            },
+          ],
+        }),
+        ['servers', 'checks', '1', '--since', '7d'],
+      );
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('msk-1 120 ms, spb-1 offline');
+      expect(server!.requests[0]!.path).toContain('startDate=');
+    });
+  },
+);
+
+describe('scenarios run secrets', { timeout: 30_000 }, () => {
+  it('masks saved variables found in the environment and warns about the rest', async () => {
+    server = await startFakeApi((r) =>
+      r.method === 'GET'
+        ? {
+            body: {
+              ...existing,
+              id: 9,
+              protocol: 'scenario',
+              scenario_env_keys: ['SHOP_PASSWORD', 'OTHER'],
+            },
+          }
+        : {
+            body: {
+              status: 'failed',
+              error: 'expected hunter22-pw',
+              console: [{ type: 'log', text: 'pw=hunter22-pw' }],
+            },
+          },
+    );
+    const result = await runCli(['--json', 'scenarios', 'run', '9'], {
+      STATUSER_API_URL: server.url,
+      STATUSER_API_KEY: 'k',
+      SHOP_PASSWORD: 'hunter22-pw',
+    });
+    expect(result.stdout).not.toContain('hunter22');
+    expect(result.stderr).toContain('OTHER');
+  });
+});

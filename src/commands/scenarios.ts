@@ -18,7 +18,7 @@ import {
 import { buildDeployPlan, type PlanStep } from '../scenarios/plan.js';
 import { checkScenarioLimits } from '../servers-config/plan.js';
 import { describeWriteFailure } from '../write-failure.js';
-import { listServers } from './servers.js';
+import { listServers, parseId, type Server } from './servers.js';
 
 type ScenarioPreviewBody = components['schemas']['ScenarioPreviewDto'];
 type CurrentPlan = components['schemas']['CurrentPlanResponseDto'];
@@ -115,6 +115,47 @@ export function registerScenariosCommands(program: Command): void {
       // back verbatim, so the values passed here are masked before output.
       const masked = maskSecrets(result, Object.values(env));
       if (json) printJson(masked);
+      else printRunResult(masked);
+      process.exitCode = runExitCode(result.status);
+    });
+
+  scenarios
+    .command('run')
+    .description(t.cmdScenariosRun)
+    .argument('<id>', 'id', parseId)
+    .action(async (id: number, _opts: unknown, command: Command) => {
+      const { client } = await authedClient(command);
+      const server = await client.call<Server>({
+        method: 'GET',
+        path: `/v1/servers/${id}`,
+      });
+      if (server.protocol !== 'scenario') {
+        throw new CliError(
+          t.scenarioNotScenario(id, server.protocol),
+          ExitCode.Usage,
+        );
+      }
+      // The answer comes when the run ends: up to the scenario's timeout
+      // plus the start. Not retried on a dropped connection — the run may
+      // have happened, and it counts like a scheduled one.
+      const result = await client.call<ScenarioRunResponse>({
+        method: 'POST',
+        path: `/v1/servers/${id}/scenario-run`,
+        timeoutMs: server.request_timeout * 1000 + PREVIEW_OVERHEAD_MS,
+      });
+      // The API returns the saved run's console and error verbatim, and the
+      // values of its variables are not readable. In CI they usually sit in
+      // the environment under the same names (the config refers to them as
+      // `$NAME`): those are masked, the rest are named in a warning.
+      const keys = server.scenario_env_keys ?? [];
+      const known = keys.filter((key) => process.env[key]);
+      const unknown = keys.filter((key) => !process.env[key]);
+      if (unknown.length) printErr(t.scenarioEnvUnmasked(unknown.join(', ')));
+      const masked = maskSecrets(
+        result,
+        known.map((key) => process.env[key] as string),
+      );
+      if (globalOptions(command).json) printJson(masked);
       else printRunResult(masked);
       process.exitCode = runExitCode(result.status);
     });

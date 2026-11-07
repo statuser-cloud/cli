@@ -22,6 +22,7 @@ import { patchPlanProblem } from '../servers-config/plan.js';
 import { describeWriteFailure } from '../write-failure.js';
 import { confirmDeletion } from '../confirm.js';
 import { registerServersAdd } from './servers-add.js';
+import { registerServersChecks } from './servers-checks.js';
 
 export type Server = components['schemas']['ServerResponseDto'];
 type CurrentPlan = components['schemas']['CurrentPlanResponseDto'];
@@ -137,6 +138,7 @@ export function registerServersCommands(program: Command): void {
     });
 
   registerServersAdd(servers);
+  registerServersChecks(servers);
 
   servers
     .command('delete')
