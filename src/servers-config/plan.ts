@@ -49,6 +49,9 @@ export function buildServersPlan(
   account: Server[],
   features: PlanFeatures,
   plannedScenarioCreates = 0,
+  // `servers add` always creates: a server of the same name is not a match
+  // there, since only heartbeats are told apart by name.
+  options: { createOnly?: boolean } = {},
 ): ServersPlan {
   const inProject = account.filter(
     (s) => s.project_id === projectId && s.protocol !== 'scenario',
@@ -59,7 +62,9 @@ export function buildServersPlan(
 
   checkNames(desired);
   for (const entry of desired) {
-    const server = matchServer(entry, byId, inProject, projectId);
+    const server = options.createOnly
+      ? undefined
+      : matchServer(entry, byId, inProject, projectId);
     if (server) {
       if (claimed.has(server.id))
         fail(t.applyClaimedTwice(entry.at, server.id));
@@ -349,7 +354,10 @@ function checkDuplicates(steps: ServerStep[], account: Server[]): void {
     ...steps.filter((s) => s.kind === 'create'),
   ];
   for (const step of ordered) {
-    const slot = step.kind === 'create' ? step.entry.at : `#${step.serverId}`;
+    // Creates and existing servers keep separate keys: a label like `#123`
+    // must not land on the slot of server 123.
+    const slot =
+      step.kind === 'create' ? `create:${step.entry.at}` : `#${step.serverId}`;
     const previous = states.get(slot);
     const state = { ...previous?.state, ...step.body };
     const label = step.entry.name ?? previous?.label ?? step.entry.at;
@@ -570,6 +578,15 @@ export function patchPlanProblem(
   features: PlanFeatures,
 ): string | null {
   if (server.protocol === 'scenario') {
+    // The API checks the plan of a scenario only when its schedule or run
+    // changes; a rename or a new description passes on any plan.
+    if (
+      !['check_interval', 'request_timeout', 'locations'].some(
+        (field) => field in body,
+      )
+    ) {
+      return null;
+    }
     if (features.scenarios_limit <= 0) return 'scenarios_limit';
     const interval = (body.check_interval as number) ?? server.check_interval;
     const timeout = (body.request_timeout as number) ?? server.request_timeout;

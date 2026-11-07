@@ -796,3 +796,21 @@ describe('nineteenth review round', () => {
     );
   });
 });
+
+describe('rename a scenario on a plan without scenarios', () => {
+  it('passes a name-only change', async () => {
+    const { patchPlanProblem } = await import('../src/servers-config/plan.js');
+    expect(
+      patchPlanProblem(
+        {
+          id: 1,
+          protocol: 'scenario',
+          check_interval: 600,
+          request_timeout: 30,
+        } as never,
+        { name: 'New' },
+        { ...plan.features, scenarios_limit: 0 } as never,
+      ),
+    ).toBeNull();
+  });
+});

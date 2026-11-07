@@ -291,7 +291,7 @@ const ru = {
     `В отчёте #${id} нет затронутых серверов — обновлять нечего.`,
 
   // servers update
-  cmdServersUpdate: 'изменить настройки серверов разом',
+  cmdServersUpdate: 'изменить настройки серверов',
   optInterval: 'интервал проверки, секунд',
   optRequestTimeout: 'таймаут проверки, секунд',
   optRegions: 'локации через запятую: msk-1, spb-1, ala-1, nyc-1, ams-1',
@@ -438,6 +438,59 @@ const ru = {
     `Не указан обязательный аргумент ${argument}`,
   errOptionValue: (option: string) => `У опции ${option} нет значения`,
   errTooManyArguments: 'Лишние аргументы.',
+  cmdServersAdd: 'добавить сервер в мониторинг',
+  cmdServersDelete: 'удалить серверы из мониторинга',
+  cmdServersTestNotify:
+    'отправить тестовый алёрт туда же, куда ушёл бы настоящий',
+  argServerHost: 'адрес: URL, домен или IP (у heartbeat не нужен)',
+  optServerName: 'имя сервера',
+  optServerHost: 'новый адрес сервера',
+  optServerDescription: 'описание; пустая строка убирает его',
+  optAddProtocol:
+    'протокол: http, keyword, ping, tcp, dns, heartbeat (по умолчанию http для URL и ping для IP)',
+  optPort: 'порт (tcp)',
+  optKeyword: 'слово на странице (keyword)',
+  optKeywordAbsent: 'алёрт, если слово появилось, а не пропало (keyword)',
+  optDnsTypes: 'типы DNS-записей через запятую, например A,AAAA (dns)',
+  optYes: 'не спрашивать подтверждение',
+  addProtocolNeeded: (host: string) =>
+    `Не понять протокол по адресу «${host}»: укажите --protocol (http, keyword, ping, tcp, dns).`,
+  addHostNeeded: 'Укажите адрес сервера.',
+  addHostNotUsed: 'У heartbeat нет адреса: уберите его, задайте --name.',
+  addCreated: (id: number, label: string) =>
+    `Сервер «${label}» добавлен: #${id}.`,
+  addDryRun: (label: string) => `Будет добавлен сервер «${label}».`,
+  deletedOne: (id: number) => `#${id}: удалён`,
+  confirmDeleteServers: (list: string) =>
+    `Удалить из мониторинга: ${list}? История проверок и инциденты удалятся вместе с ними. [y/N] `,
+  confirmDeleteIncidents: (list: string) => `Удалить инциденты ${list}? [y/N] `,
+  confirmNeedsYes:
+    'Удаление без терминала требует --yes: спросить подтверждение некому.',
+  cancelled: 'Отменено, ничего не изменено.',
+  testNotifySent: (id: number) =>
+    `Тестовый алёрт по серверу #${id} отправлен в каналы его проекта.`,
+  updateSingleOnly:
+    '--name, --host и --description меняют один сервер: укажите ровно один id.',
+  updateHostNotApplicable: (id: number, protocol: string) =>
+    `#${id}: у ${protocol} адрес системный, его не меняют.`,
+  updateDuplicate: (id: number, other: number) =>
+    `#${id}: такой сервер уже есть — #${other}.`,
+  cmdIncidentsDelete: 'удалить инциденты',
+  cmdIncidentsComment: 'добавить комментарий к инциденту',
+  optCommentText: 'текст комментария',
+  commentInvalid: (max: number) =>
+    `Комментарий не может быть пустым или длиннее ${max} символов.`,
+  commentAdded: (id: number) => `Комментарий добавлен к инциденту #${id}.`,
+  cmdProjects: 'проекты аккаунта',
+  cmdProjectsList: 'список проектов',
+  projectsEmpty: 'Проектов нет.',
+  cmdPages: 'страницы статуса',
+  cmdPagesList: 'список страниц статуса',
+  pagesEmpty: 'Страниц статуса нет.',
+  colSlug: 'Путь',
+  colPublished: 'Опубликована',
+  yes: 'да',
+  no: 'нет',
 };
 
 export type Messages = typeof ru;
@@ -698,7 +751,7 @@ const en: Messages = {
   reportNoServers: (id) =>
     `Report #${id} has no affected servers — nothing to update.`,
 
-  cmdServersUpdate: 'change settings of many servers at once',
+  cmdServersUpdate: 'change server settings',
   optInterval: 'check interval, seconds',
   optRequestTimeout: 'check timeout, seconds',
   optRegions: 'comma-separated locations: msk-1, spb-1, ala-1, nyc-1, ams-1',
@@ -837,6 +890,58 @@ const en: Messages = {
   errMissingArgument: (argument) => `Missing required argument ${argument}`,
   errOptionValue: (option) => `Option ${option} has no value`,
   errTooManyArguments: 'Too many arguments.',
+  cmdServersAdd: 'add a server to monitoring',
+  cmdServersDelete: 'delete servers from monitoring',
+  cmdServersTestNotify: 'send a test alert where a real one would go',
+  argServerHost: 'address: URL, domain or IP (not used by heartbeat)',
+  optServerName: 'server name',
+  optServerHost: 'new server address',
+  optServerDescription: 'description; an empty string removes it',
+  optAddProtocol:
+    'protocol: http, keyword, ping, tcp, dns, heartbeat (default: http for a URL, ping for an IP)',
+  optPort: 'port (tcp)',
+  optKeyword: 'word on the page (keyword)',
+  optKeywordAbsent:
+    'alert when the word appears, not when it is gone (keyword)',
+  optDnsTypes: 'DNS record types, comma-separated, e.g. A,AAAA (dns)',
+  optYes: 'do not ask for confirmation',
+  addProtocolNeeded: (host) =>
+    `Cannot tell the protocol from "${host}": pass --protocol (http, keyword, ping, tcp, dns).`,
+  addHostNeeded: 'Give the server address.',
+  addHostNotUsed: 'A heartbeat has no address: drop it and pass --name.',
+  addCreated: (id, label) => `Server "${label}" added: #${id}.`,
+  addDryRun: (label) => `Server "${label}" will be added.`,
+  deletedOne: (id) => `#${id}: deleted`,
+  confirmDeleteServers: (list) =>
+    `Delete from monitoring: ${list}? Their check history and incidents go too. [y/N] `,
+  confirmDeleteIncidents: (list) => `Delete incidents ${list}? [y/N] `,
+  confirmNeedsYes:
+    'Deleting without a terminal needs --yes: there is no one to confirm.',
+  cancelled: 'Cancelled, nothing changed.',
+  testNotifySent: (id) =>
+    `A test alert for server #${id} went to the channels of its project.`,
+  updateSingleOnly:
+    '--name, --host and --description change one server: give exactly one id.',
+  updateHostNotApplicable: (id, protocol) =>
+    `#${id}: a ${protocol} address is system-made and is not changed.`,
+  updateDuplicate: (id, other) =>
+    `#${id}: such a server already exists — #${other}.`,
+  cmdIncidentsDelete: 'delete incidents',
+  cmdIncidentsComment: 'add a comment to an incident',
+  optCommentText: 'comment text',
+  commentInvalid: (max) =>
+    `A comment cannot be empty or longer than ${max} characters.`,
+  commentAdded: (id) => `Comment added to incident #${id}.`,
+  cmdProjects: 'projects of the account',
+  cmdProjectsList: 'list projects',
+  projectsEmpty: 'No projects.',
+  cmdPages: 'status pages',
+  cmdPagesList: 'list status pages',
+  pagesEmpty: 'No status pages.',
+  colSlug: 'Path',
+  colPublished: 'Published',
+  yes: 'yes',
+  no: 'no',
 };
 
 const dictionaries: Record<Lang, Messages> = { ru, en };

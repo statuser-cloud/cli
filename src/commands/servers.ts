@@ -12,9 +12,16 @@ import {
   planServerPatch,
   type BulkChange,
 } from '../servers-update.js';
-import { isSecretHeader, MANAGED_PROTOCOLS } from '../servers-config/fields.js';
+import {
+  duplicateKey,
+  isDuplicateOf,
+  isSecretHeader,
+  MANAGED_PROTOCOLS,
+} from '../servers-config/fields.js';
 import { patchPlanProblem } from '../servers-config/plan.js';
 import { describeWriteFailure } from '../write-failure.js';
+import { confirmDeletion } from '../confirm.js';
+import { registerServersAdd } from './servers-add.js';
 
 export type Server = components['schemas']['ServerResponseDto'];
 type CurrentPlan = components['schemas']['CurrentPlanResponseDto'];
@@ -129,6 +136,48 @@ export function registerServersCommands(program: Command): void {
       );
     });
 
+  registerServersAdd(servers);
+
+  servers
+    .command('delete')
+    .description(t.cmdServersDelete)
+    .argument('<ids...>', 'id')
+    .option('--yes', t.optYes)
+    .action(
+      async (ids: string[], opts: { yes?: boolean }, command: Command) => {
+        const { client } = await authedClient(command);
+        // Only explicit ids: a whole project is never deleted by one flag.
+        const targets = pickTargets(await listServers(client), ids, undefined);
+        await confirmDeletion(
+          t.confirmDeleteServers(
+            targets.map((s) => `«${s.name || s.host}» (#${s.id})`).join(', '),
+          ),
+          opts.yes,
+        );
+        const result = await bulkApply(
+          targets,
+          () => null,
+          (server) =>
+            client.call({ method: 'DELETE', path: `/v1/servers/${server.id}` }),
+        );
+        report(command, result, t.deletedOne);
+      },
+    );
+
+  servers
+    .command('test-notify')
+    .description(t.cmdServersTestNotify)
+    .argument('<id>', 'id', parseId)
+    .action(async (id: number, _opts: unknown, command: Command) => {
+      const { client } = await authedClient(command);
+      await client.call({
+        method: 'POST',
+        path: `/v1/servers/${id}/test-notify`,
+      });
+      if (globalOptions(command).json) printJson({ sent: true, id });
+      else printLine(t.testNotifySent(id));
+    });
+
   servers
     .command('pause')
     .description(t.cmdServersPause)
@@ -186,6 +235,9 @@ export function registerServersCommands(program: Command): void {
     .argument('[ids...]', 'id')
     .option('--project <id>', t.optProject, parseId)
     .option('--protocol <protocol>', t.optProtocol, parseProtocol)
+    .option('--name <name>', t.optServerName)
+    .option('--host <host>', t.optServerHost)
+    .option('--description <text>', t.optServerDescription)
     .option('--interval <seconds>', t.optInterval, parseNonNegative)
     .option('--timeout <seconds>', t.optRequestTimeout, parseNonNegative)
     .option('--regions <codes>', t.optRegions)
@@ -207,6 +259,13 @@ export function registerServersCommands(program: Command): void {
         all = all.filter((server) => server.protocol === opts.protocol);
       }
       const targets = pickTargets(all, ids, opts.project);
+      const identity =
+        change.name !== undefined ||
+        change.host !== undefined ||
+        change.description !== undefined;
+      if (identity && targets.length !== 1) {
+        throw new CliError(t.updateSingleOnly, ExitCode.Usage);
+      }
       const plans = new Map(
         targets.map((server) => [server.id, planServerPatch(server, change)]),
       );
@@ -227,6 +286,13 @@ export function registerServersCommands(program: Command): void {
             ExitCode.Usage,
           );
         }
+      }
+      if (identity) {
+        await checkIdentity(
+          client,
+          targets[0]!,
+          plans.get(targets[0]!.id)!.body,
+        );
       }
       const json = globalOptions(command).json;
       if (opts.dryRun) {
@@ -275,6 +341,9 @@ export function registerServersCommands(program: Command): void {
 interface UpdateOptions {
   project?: number;
   protocol?: string;
+  name?: string;
+  host?: string;
+  description?: string;
   interval?: number;
   timeout?: number;
   regions?: string;
@@ -317,6 +386,9 @@ function toBulkChange(opts: UpdateOptions): BulkChange {
     throw new CliError(t.numberRange(LATENCY_MIN, LATENCY_MAX), ExitCode.Usage);
   }
   const change: BulkChange = {
+    name: opts.name,
+    host: opts.host,
+    description: opts.description,
     interval: opts.interval,
     timeout: opts.timeout,
     regions,
@@ -330,6 +402,29 @@ function toBulkChange(opts: UpdateOptions): BulkChange {
     throw new CliError(t.updateNothing, ExitCode.Usage);
   }
   return change;
+}
+
+/**
+ * A new name of a heartbeat or a new address is checked like a create:
+ * the API refuses a write that makes the server a duplicate of another,
+ * anywhere in the account. Only when the identity really changes, as there.
+ */
+async function checkIdentity(
+  client: StatuserClient,
+  server: Server,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const before = server as unknown as Record<string, unknown>;
+  const after = { ...before, ...body };
+  if (duplicateKey(before) === duplicateKey(after)) return;
+  const other = (await listServers(client)).find(
+    (s) =>
+      s.id !== server.id &&
+      isDuplicateOf(after, s as unknown as Record<string, unknown>),
+  );
+  if (other) {
+    throw new CliError(t.updateDuplicate(server.id, other.id), ExitCode.Usage);
+  }
 }
 
 function describeUpdate(
@@ -364,8 +459,9 @@ export function pickTargets(
     return all;
   }
   const byId = new Map(all.map((server) => [server.id, server]));
-  return rawIds.map((raw) => {
-    const id = parseId(raw);
+  // A repeated id would be written twice: a second DELETE gets 404.
+  const ids = [...new Set(rawIds.map(parseId))];
+  return ids.map((id) => {
     const server = byId.get(id);
     if (!server) {
       throw new StatuserApiError(404, t.notFound(id), 'server_not_found');
@@ -388,10 +484,10 @@ async function bulk(
   );
 }
 
-export async function bulkApply(
-  targets: Server[],
-  skipReason: (server: Server) => string | null,
-  apply: (server: Server) => Promise<unknown>,
+export async function bulkApply<T extends { id: number }>(
+  targets: T[],
+  skipReason: (server: T) => string | null,
+  apply: (server: T) => Promise<unknown>,
 ): Promise<BulkResult> {
   const result: BulkResult = { done: [], skipped: [], failed: [] };
   for (const server of targets) {

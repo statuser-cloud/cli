@@ -13,7 +13,9 @@ import {
   printLine,
   printTable,
 } from '../output.js';
-import { listServers, parseId } from './servers.js';
+import { confirmDeletion } from '../confirm.js';
+import { textLength } from '../text-length.js';
+import { bulkApply, listServers, parseId, report } from './servers.js';
 
 type Incident = components['schemas']['IncidentResponseDto'];
 type IncidentStatus = Incident['status'];
@@ -200,7 +202,57 @@ export function registerIncidentsCommands(program: Command): void {
         }
       },
     );
+
+  incidents
+    .command('delete')
+    .description(t.cmdIncidentsDelete)
+    .argument('<ids...>', 'id')
+    .option('--yes', t.optYes)
+    .action(
+      async (ids: string[], opts: { yes?: boolean }, command: Command) => {
+        const targets = [...new Set(ids.map(parseId))].map((id) => ({ id }));
+        const { client } = await authedClient(command);
+        await confirmDeletion(
+          t.confirmDeleteIncidents(
+            targets.map(({ id }) => `#${id}`).join(', '),
+          ),
+          opts.yes,
+        );
+        const result = await bulkApply(
+          targets,
+          () => null,
+          ({ id }) =>
+            client.call({ method: 'DELETE', path: `/v1/incidents/${id}` }),
+        );
+        report(command, result, t.deletedOne);
+      },
+    );
+
+  incidents
+    .command('comment')
+    .description(t.cmdIncidentsComment)
+    .argument('<id>', 'id', parseId)
+    .requiredOption('-m, --message <text>', t.optCommentText)
+    .action(async (id: number, opts: { message: string }, command: Command) => {
+      const text = opts.message.trim();
+      if (!text || textLength(text) > COMMENT_MAX_LENGTH) {
+        throw new CliError(
+          t.commentInvalid(COMMENT_MAX_LENGTH),
+          ExitCode.Usage,
+        );
+      }
+      const { client } = await authedClient(command);
+      const comment = await client.call<unknown>({
+        method: 'POST',
+        path: `/v1/incidents/${id}/comments`,
+        body: { comment_text: text },
+      });
+      if (globalOptions(command).json) printJson(comment);
+      else printLine(t.commentAdded(id));
+    });
 }
+
+const COMMENT_MAX_LENGTH = 65_535;
 
 export function splitList(raw: string | undefined): string[] {
   return (raw ?? '')

@@ -1,9 +1,17 @@
 import type { Server } from './commands/servers.js';
+import { isForbiddenHost } from './servers-config/forbidden-host.js';
+import { HOST_PATTERN } from './servers-config/host-pattern.js';
+import { textLength } from './text-length.js';
 
 type Protocol = Server['protocol'];
 
 /** What `servers update` was asked to set; undefined — leave as is. */
 export interface BulkChange {
+  /** Name, address and description are set on one server at a time. */
+  name?: string;
+  host?: string;
+  /** An empty string removes the description. */
+  description?: string;
   interval?: number;
   timeout?: number;
   regions?: string[];
@@ -50,6 +58,23 @@ export function planServerPatch(
     fields.push(field);
   };
 
+  if (change.name !== undefined && change.name.trim() !== server.name) {
+    set('name', 'name', change.name.trim());
+  }
+  if (change.host !== undefined) {
+    // The address of a heartbeat or a scenario is made by the system.
+    if (server.protocol === 'heartbeat' || server.protocol === 'scenario') {
+      notApplicable.push('host');
+    } else if (change.host.trim() !== server.host) {
+      set('host', 'host', change.host.trim());
+    }
+  }
+  if (change.description !== undefined) {
+    const description = change.description.trim() || null;
+    if (description !== (server.description ?? null)) {
+      set('description', 'description', description);
+    }
+  }
   if (
     change.interval !== undefined &&
     change.interval !== server.check_interval
@@ -122,6 +147,23 @@ export function bulkTargetProblem(
   server: Server,
   plan: PlannedPatch,
 ): string | null {
+  // The API's limits for the text fields (`CreateServerDto`).
+  if ('name' in plan.body) {
+    const name = plan.body.name as string;
+    if (!name) return 'name: empty';
+    if (textLength(name) > 150) return 'name ≤ 150';
+  }
+  if ('host' in plan.body) {
+    const host = plan.body.host as string;
+    if (!HOST_PATTERN.test(host) || textLength(host) > 300) return 'host';
+    if (isForbiddenHost(host)) return 'host: internal address';
+  }
+  if (
+    typeof plan.body.description === 'string' &&
+    textLength(plan.body.description) > 500
+  ) {
+    return 'description ≤ 500';
+  }
   const interval =
     (plan.body.check_interval as number | undefined) ?? server.check_interval;
   const timeout =

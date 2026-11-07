@@ -57,8 +57,13 @@ version.
 - Write commands must not leave half-applied state they could have prevented:
   everything the API would reject mid-way (limits, names, duplicates) is
   checked before the first write — see `scenarios/plan.ts`.
-- **The CLI never deletes.** `apply` and `deploy` only list what the file
-  does not mention; removal is an explicit `statuser api … -X DELETE`.
+- **The CLI never deletes on its own.** `apply` and `deploy` only list what
+  the file does not mention. Removal is an explicit `servers delete` or
+  `incidents delete` by id, never by project, and asks first
+  (`confirm.ts`): without a terminal it needs `--yes`.
+- **`servers add` goes through the `apply` parser and plan**
+  (`createOnly`): one place for ranges, the host gate, duplicates and the
+  plan, so a check added there covers both.
 - **`apply` never changes a server's protocol**: the backend wipes what
   belonged to the old one (HTTP credentials, LLM key, heartbeat token).
 - **What a protocol uses lives in one place** — `servers-config/fields.ts`

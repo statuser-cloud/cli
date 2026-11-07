@@ -96,6 +96,9 @@ export function parseServersSection(
   raw: unknown,
   env: NodeJS.ProcessEnv,
   fail: (problem: string) => never,
+  // A file finds an entry without an id by its name on every run; a single
+  // `servers add` creates and is done, so the name may be left out there.
+  options: { allowUnnamed?: boolean } = {},
 ): DesiredServer[] {
   if (!Array.isArray(raw)) return fail(`servers: ${t.cfgArray}`);
   const result: DesiredServer[] = [];
@@ -127,7 +130,7 @@ export function parseServersSection(
     if (name !== null && textLength(name) > NAME_MAX) {
       return fail(`${at}.name: ${t.cfgMaxLength(NAME_MAX)}`);
     }
-    if (name === null && entry.id === undefined) {
+    if (name === null && entry.id === undefined && !options.allowUnnamed) {
       return fail(`${at}: ${t.cfgNameOrId}`);
     }
 
