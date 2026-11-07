@@ -1,6 +1,6 @@
 # CLI Statuser
 
-[![npm version](https://img.shields.io/npm/v/statuser.svg)](https://www.npmjs.com/package/statuser)
+[![npm version](https://img.shields.io/npm/v/@statuser/cli.svg)](https://www.npmjs.com/package/@statuser/cli)
 [![CI](https://github.com/statuser-cloud/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/statuser-cloud/cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -37,13 +37,15 @@ Locator: getByRole('heading', { name: 'Мои заказы' })
 Через npm, если на машине есть Node.js 20.19 или новее:
 
 ```bash
-npm install -g statuser
+npm install -g @statuser/cli
 ```
+
+Пакет называется `@statuser/cli`, команда после установки — `statuser`.
 
 В CI устанавливать не обязательно, достаточно `npx`:
 
 ```bash
-npx -y statuser scenarios deploy
+npx -y @statuser/cli scenarios deploy
 ```
 
 Без Node — один исполняемый файл со страницы [релизов](https://github.com/statuser-cloud/cli/releases/latest):
@@ -360,11 +362,11 @@ jobs:
       - name: Прогнать тесты
         run: |
           for file in checks/*.spec.ts; do
-            npx -y statuser scenarios test "$file" \
+            npx -y @statuser/cli scenarios test "$file" \
               --env SHOP_LOGIN='$SHOP_LOGIN' --env SHOP_PASSWORD='$SHOP_PASSWORD'
           done
       - name: Выкатить
-        run: npx -y statuser scenarios deploy
+        run: npx -y @statuser/cli scenarios deploy
 ```
 
 ### GitLab CI
@@ -377,11 +379,11 @@ deploy:
   variables:
     STATUSER_PROJECT: '100000'
   before_script:
-    - npx -y statuser servers pause --project "$STATUSER_PROJECT" --json > paused.json
+    - npx -y @statuser/cli servers pause --project "$STATUSER_PROJECT" --json > paused.json
   script:
     - ./deploy.sh
   after_script:
-    - npx -y statuser servers resume --from paused.json
+    - npx -y @statuser/cli servers resume --from paused.json
 ```
 
 `STATUSER_API_KEY` задайте в настройках CI/CD проекта как замаскированную переменную.

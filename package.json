@@ -1,5 +1,5 @@
 {
-  "name": "statuser",
+  "name": "@statuser/cli",
   "version": "0.1.0",
   "description": "Statuser.cloud command line: scenario checks as code, maintenance windows in CI, heartbeat for cron jobs",
   "keywords": [
