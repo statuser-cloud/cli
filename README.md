@@ -48,14 +48,34 @@ npm install -g @statuser/cli
 npx -y @statuser/cli scenarios deploy
 ```
 
-Без Node — один исполняемый файл со страницы [релизов](https://github.com/statuser-cloud/cli/releases/latest):
+Без Node — одной командой, скрипт скачивает исполняемый файл из последнего [релиза](https://github.com/statuser-cloud/cli/releases/latest):
+
+```bash
+curl -fsSL https://statuser.cloud/cli/install.sh | sh
+```
+
+В Windows, в PowerShell:
+
+```powershell
+irm https://statuser.cloud/cli/install.ps1 | iex
+```
+
+Скрипт кладёт `statuser` в `/usr/local/bin`, если туда можно писать без sudo, иначе в `~/.local/bin`, а в Windows — в `%LOCALAPPDATA%\Programs\statuser` и добавляет эту папку в `PATH` пользователя. Архив сверяется с `SHA256SUMS` того же релиза до установки. Другую версию задаёт `STATUSER_VERSION`, например `curl … | STATUSER_VERSION=0.1.1 sh`, папку — `STATUSER_INSTALL_DIR`.
+
+Через Homebrew на macOS и Linux:
+
+```bash
+brew install statuser-cloud/tap/statuser
+```
+
+Вручную — архив со страницы релизов:
 
 ```bash
 curl -fsSL https://github.com/statuser-cloud/cli/releases/latest/download/statuser-linux-x64.tar.gz | tar -xz
 sudo mv statuser /usr/local/bin/
 ```
 
-Для других систем замените `linux-x64` на `linux-arm64`, `macos-arm64` или `macos-x64`. Для Windows скачайте `statuser-windows-x64.zip`. Контрольные суммы лежат в файле `SHA256SUMS` того же релиза. Если на macOS файл скачан браузером, система не даст его запустить, пока не снять отметку: `xattr -d com.apple.quarantine statuser`.
+Для других систем — `linux-arm64`, `macos-arm64`, `macos-x64` или `statuser-windows-x64.zip`, контрольные суммы — в `SHA256SUMS`. Файл, скачанный на macOS браузером, запустится после `xattr -d com.apple.quarantine statuser`.
 
 Справка и сообщения выводятся на языке системы: на русском, если `LANG` начинается с `ru`, иначе на английском. Справка по любой команде: `statuser <команда> --help`.
 
@@ -391,6 +411,18 @@ deploy:
 ## Справка
 
 Команды, которые нужны реже, и общие правила: переменные окружения, коды выхода, работа с ключом и повтор запросов.
+
+### Автодополнение
+
+`statuser completion` печатает скрипт автодополнения команд, флагов и их значений. Сохраните его туда, откуда оболочка подгружает дополнения:
+
+```bash
+statuser completion bash > ~/.local/share/bash-completion/completions/statuser
+statuser completion zsh > "${fpath[1]}/_statuser"
+statuser completion fish > ~/.config/fish/completions/statuser.fish
+```
+
+Дополнение заработает в новой сессии оболочки. Homebrew устанавливает его сам, вместе с CLI.
 
 ### Остальные команды
 
