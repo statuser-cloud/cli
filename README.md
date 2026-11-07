@@ -34,7 +34,7 @@ Locator: getByRole('heading', { name: 'Мои заказы' })
 
 ## Установка
 
-Нужен Node.js 20.19 или новее.
+Через npm, если на машине есть Node.js 20.19 или новее:
 
 ```bash
 npm install -g statuser
@@ -45,6 +45,15 @@ npm install -g statuser
 ```bash
 npx -y statuser scenarios deploy
 ```
+
+Без Node — один исполняемый файл со страницы [релизов](https://github.com/statuser-cloud/cli/releases/latest):
+
+```bash
+curl -fsSL https://github.com/statuser-cloud/cli/releases/latest/download/statuser-linux-x64.tar.gz | tar -xz
+sudo mv statuser /usr/local/bin/
+```
+
+Для других систем замените `linux-x64` на `linux-arm64`, `macos-arm64` или `macos-x64`. Для Windows скачайте `statuser-windows-x64.zip`. Контрольные суммы лежат в файле `SHA256SUMS` того же релиза. Если на macOS файл скачан браузером, система не даст его запустить, пока не снять отметку: `xattr -d com.apple.quarantine statuser`.
 
 Справка и сообщения выводятся на языке системы: на русском, если `LANG` начинается с `ru`, иначе на английском. Справка по любой команде: `statuser <команда> --help`.
 
