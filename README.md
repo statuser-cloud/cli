@@ -26,6 +26,7 @@ Locator: getByRole('heading', { name: 'Мои заказы' })
 - [Пауза проверок на время деплоя](#пауза-проверок-на-время-деплоя)
 - [Плановые работы на странице статуса](#плановые-работы-на-странице-статуса)
 - [Heartbeat](#heartbeat)
+- [Серверы: добавить, изменить, удалить](#серверы-добавить-изменить-удалить)
 - [Серверы как код: export, diff, apply](#серверы-как-код-export-diff-apply)
 - [Массовые правки](#массовые-правки)
 - [Инциденты](#инциденты)
@@ -208,6 +209,22 @@ STATUSER_HEARTBEAT_TOKEN=… statuser run -- ./backup.sh
 - Пока не пришёл первый сигнал, Statuser не знает, что задача запущена, и пропуски не считает. Интервал и допустимую задержку heartbeat-сервера задайте с запасом на самую долгую задачу.
 - Разовый сигнал без команды: `statuser heartbeat ping "$TOKEN"`, сигнал ошибки — с `--fail`.
 
+## Серверы: добавить, изменить, удалить
+
+```bash
+statuser servers add https://shop.example.com --name "Магазин" --project 100000
+statuser servers add 203.0.113.10 --name "Шлюз"
+statuser servers add db.example.com --protocol tcp --port 5432
+statuser servers add --protocol heartbeat --name "Бэкап" --interval 86400
+statuser servers update 101 --name "Магазин (прод)" --host https://shop.example.ru
+statuser servers test-notify 101
+statuser servers delete 101
+```
+
+Протокол определяется по адресу: URL — HTTP-проверка, IP — ping. Для домена без схемы укажите `--protocol`. Остальные настройки получают значения по умолчанию, как в панели, а меняет их `servers update`. До создания проверяется то же, что в `apply`: дубли во всём аккаунте, тариф, внутренние адреса. Без `--project` сервер попадает в самый старый проект аккаунта. Id проектов и страниц статуса показывают `statuser projects list` и `statuser pages list`.
+
+`test-notify` отправляет тестовый алёрт в те же каналы, куда ушёл бы настоящий. `delete` удаляет сервер вместе с историей проверок и инцидентами, поэтому сначала спрашивает подтверждение. В CI вопрос задать некому, там нужен `--yes`.
+
 ## Серверы как код: export, diff, apply
 
 Серверы проекта — HTTP, keyword, ping, TCP, DNS, heartbeat и LLM — описываются в той же `statuser.json`, что и сценарии, в секции `servers`.
@@ -265,6 +282,8 @@ statuser incidents list --since 7d --project 100000
 statuser incidents get 5021
 statuser incidents ai 5021                      # разбор Statuser AI
 statuser incidents pdf 5021 -o incident-5021.pdf
+statuser incidents comment 5021 -m "Выкатили исправление"
+statuser incidents delete 5021
 ```
 
 `--since` и `--until` фильтруют по времени начала инцидента: `24h`, `7d` или дата. Диагностика и разбор Statuser AI есть на платных тарифах; если данных нет, разбор так и скажет. PDF сохраняется с доступом только для владельца, существующий файл перезаписывается только с `--force`.
@@ -342,7 +361,8 @@ deploy:
 ```bash
 statuser servers list --project 100000 --protocol http
 statuser servers get 101
-statuser api /v1/status-pages
+statuser projects list
+statuser pages list
 statuser api /v1/servers/101 -X PATCH -F check_interval=120
 statuser whoami
 statuser logout
@@ -375,7 +395,7 @@ statuser logout
 
 - **Тесты выполняются не на вашей машине**, а в изолированной песочнице Statuser, из выбранного города — так же, как прогон по расписанию. Поэтому `scenarios test` показывает то, что увидит мониторинг, а не то, что видно из офиса.
 - **Ключ уходит только на адрес API.** CLI не идёт за редиректами и не отправляет ключ на другой адрес. Ключ, сохранённый для одного адреса API, не используется для другого.
-- **CLI ничего не удаляет сам.** Удалить сервер можно только явным запросом через `statuser api`.
+- **CLI ничего не удаляет сам.** `apply` и `deploy` только перечисляют серверы, которых нет в файле. Удаляют явные команды `servers delete` и `incidents delete`, и только после подтверждения.
 - **Запрос повторяется, только когда он точно не ушёл**: соединение не установилось — две повторные попытки, ответ 429 — после паузы из `Retry-After`. Если запись ушла, но ответа нет (обрыв, таймаут, 5xx), `apply` и `deploy` останавливаются и сообщают, что исход неизвестен: перед повтором запустите `statuser diff`.
 
 ## Смотрите также
