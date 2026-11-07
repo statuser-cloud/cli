@@ -425,10 +425,14 @@ statuser logout
 
 ## Смотрите также
 
-- [MCP-сервер Statuser](https://github.com/statuser-cloud/mcp) — то же API из ИИ-клиента: Claude Code, Cursor, VS Code.
-- [Документация API](https://statuser.cloud/api-reference).
-- Ошибки и предложения — в [issues](https://github.com/statuser-cloud/cli/issues).
+[MCP-сервер Statuser](https://github.com/statuser-cloud/mcp) даёт то же API ИИ-клиентам: Claude Code, Cursor, VS Code.
+
+## Обратная связь
+
+Ошибки и предложения — в [issues](https://github.com/statuser-cloud/cli/issues). Об уязвимостях сообщайте приватно — см. [SECURITY.md](SECURITY.md).
+
+Общие вопросы по API — в [документации Statuser](https://statuser.cloud/api-reference) или на [info@statuser.cloud](mailto:info@statuser.cloud).
 
 ## Лицензия
 
-MIT
+MIT — см. [LICENSE](LICENSE).
