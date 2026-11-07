@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the statuser CLI from a GitHub release of statuser-cloud/cli:
 #
-#   curl -fsSL https://raw.githubusercontent.com/statuser-cloud/cli/main/install.sh | sh
+#   curl -fsSL https://statuser.cloud/cli/install.sh | sh
 #
 # STATUSER_VERSION=0.2.0 picks a version (default: the latest release),
 # STATUSER_INSTALL_DIR a directory (default: /usr/local/bin when writable,

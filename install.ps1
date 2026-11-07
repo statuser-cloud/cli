@@ -1,7 +1,7 @@
 # Installs the statuser CLI on Windows from a GitHub release of
 # statuser-cloud/cli:
 #
-#   irm https://raw.githubusercontent.com/statuser-cloud/cli/main/install.ps1 | iex
+#   irm https://statuser.cloud/cli/install.ps1 | iex
 #
 # $env:STATUSER_VERSION picks a version (default: the latest release),
 # $env:STATUSER_INSTALL_DIR a directory (default:
