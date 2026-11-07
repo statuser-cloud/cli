@@ -31,7 +31,7 @@ const ru = {
   cmdLogout: 'удалить сохранённый API-ключ',
   cmdWhoami: 'показать аккаунт, к которому относится ключ',
   optWithToken: 'прочитать ключ из stdin, а не спрашивать',
-  promptApiKey: 'API-ключ (панель Statuser → Настройки аккаунта → API и MCP): ',
+  promptApiKey: 'API-ключ (панель Statuser → Настройки аккаунта → API-ключи): ',
   loginEmptyKey: 'Ключ пустой.',
   loginNoTty:
     'Нет терминала для ввода. Передайте ключ через stdin: statuser login --with-token < key.txt',
@@ -532,7 +532,7 @@ const en: Messages = {
   cmdLogout: 'remove the saved API key',
   cmdWhoami: 'show the account the key belongs to',
   optWithToken: 'read the key from stdin instead of prompting',
-  promptApiKey: 'API key (Statuser panel → Account settings → API and MCP): ',
+  promptApiKey: 'API key (Statuser panel → Account settings → API keys): ',
   loginEmptyKey: 'The key is empty.',
   loginNoTty:
     'No terminal to prompt on. Pass the key via stdin: statuser login --with-token < key.txt',

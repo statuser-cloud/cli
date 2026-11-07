@@ -81,12 +81,12 @@ sudo mv statuser /usr/local/bin/
 
 ## Быстрый старт
 
-1. Создайте ключ в [панели Statuser](https://statuser.cloud/my/account/api-keys): «Настройки аккаунта → API и MCP».
+1. Создайте ключ в [панели Statuser](https://statuser.cloud/my/account/api-keys): «Настройки аккаунта → API-ключи».
 2. Сохраните его на этой машине:
 
    ```console
    $ statuser login
-   API-ключ (панель Statuser → Настройки аккаунта → API и MCP):
+   API-ключ (панель Statuser → Настройки аккаунта → API-ключи):
    Готово: you@example.com. Ключ сохранён в /home/you/.config/statuser/config.json
    ```
 
