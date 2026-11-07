@@ -49,3 +49,27 @@ jobs:
       - name: Smoke
         run: node dist/index.js --version
 
+  binary:
+    # The standalone executable bundles the CLI into one CommonJS file; a
+    # top-level await or a runtime file read breaks it only there. The whole
+    # suite runs against the built binary.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the binary
+        run: npx tsx scripts/build-binary.ts
+
+      - name: Test the binary
+        run: STATUSER_TEST_BINARY=build/statuser-linux-x64 npm test
+

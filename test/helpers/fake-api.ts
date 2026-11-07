@@ -74,17 +74,24 @@ export interface CliResult {
 
 const TSX = join(process.cwd(), 'node_modules', '.bin', 'tsx');
 const ENTRY = join(process.cwd(), 'src', 'index.ts');
+// `STATUSER_TEST_BINARY=build/statuser-…` runs the suite against the
+// standalone executable instead of the sources: the release checks each
+// platform's binary this way.
+const BINARY = process.env.STATUSER_TEST_BINARY;
+const [COMMAND, PREFIX] = BINARY
+  ? [join(process.cwd(), BINARY), []]
+  : [TSX, [ENTRY]];
 
 /**
- * Runs the CLI from source in a child process with an isolated config
- * directory and English messages, the way a CI job would.
+ * Runs the CLI in a child process with an isolated config directory and
+ * English messages, the way a CI job would.
  */
 export function runCli(
   args: string[],
   env: Record<string, string | undefined> = {},
 ): Promise<CliResult> {
   return new Promise((resolve) => {
-    const child = spawn(TSX, [ENTRY, ...args], {
+    const child = spawn(COMMAND, [...PREFIX, ...args], {
       env: {
         PATH: process.env.PATH,
         HOME: process.env.HOME,

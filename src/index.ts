@@ -38,11 +38,10 @@ registerIncidentsCommands(program);
 registerReportsCommands(program);
 registerHeartbeatCommands(program);
 
-try {
-  await program.parseAsync(process.argv);
-} catch (error) {
+// No top-level await: the standalone binary runs this as CommonJS.
+program.parseAsync(process.argv).catch((error: unknown) => {
   process.exitCode = handleError(error);
-}
+});
 
 function handleError(error: unknown): number {
   if (error instanceof CommanderError) {

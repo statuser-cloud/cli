@@ -7,10 +7,19 @@ import {
 } from './errors.js';
 import { t } from './i18n.js';
 
-const require = createRequire(import.meta.url);
-export const CLI_VERSION: string = (
-  require('../package.json') as { version: string }
-).version;
+// The standalone binary is one bundled file with no package.json next to
+// it, so its build puts the version in `__STATUSER_VERSION__`. The npm
+// package reads it from the file, and only then: `import.meta` has no URL
+// inside the bundle.
+declare const __STATUSER_VERSION__: string | undefined;
+export const CLI_VERSION: string =
+  typeof __STATUSER_VERSION__ === 'string'
+    ? __STATUSER_VERSION__
+    : (
+        createRequire(import.meta.url)('../package.json') as {
+          version: string;
+        }
+      ).version;
 
 const USER_AGENT = `statuser-cli/${CLI_VERSION}`;
 const MAX_429_RETRIES = 2;

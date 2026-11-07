@@ -67,3 +67,85 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+
+  binaries:
+    # One standalone executable per platform, built on its own runner: Node
+    # single executable applications cannot be cross-built. Each binary runs
+    # the test suite before it is attached (Windows only a smoke run: the
+    # suite drives POSIX shells and signals).
+    needs: publish
+    if: github.event_name == 'push'
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-latest, name: linux-x64 }
+          - { runner: ubuntu-24.04-arm, name: linux-arm64 }
+          - { runner: macos-latest, name: macos-arm64 }
+          - { runner: macos-15-intel, name: macos-x64 }
+          - { runner: windows-latest, name: windows-x64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the binary
+        run: npx tsx scripts/build-binary.ts
+
+      - name: Test the binary
+        if: runner.os != 'Windows'
+        run: STATUSER_TEST_BINARY=build/statuser-${{ matrix.name }} npm test
+
+      - name: Smoke
+        if: runner.os == 'Windows'
+        run: build\statuser-${{ matrix.name }}.exe --version
+
+      - name: Pack
+        if: runner.os != 'Windows'
+        run: |
+          mkdir pkg
+          cp build/statuser-${{ matrix.name }} pkg/statuser
+          tar -C pkg -czf statuser-${{ matrix.name }}.tar.gz statuser
+
+      - name: Pack
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory pkg | Out-Null
+          Copy-Item build/statuser-${{ matrix.name }}.exe pkg/statuser.exe
+          Compress-Archive -Path pkg/statuser.exe -DestinationPath statuser-${{ matrix.name }}.zip
+
+      - name: Keep the archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: statuser-${{ matrix.name }}
+          path: statuser-${{ matrix.name }}.*
+
+  attach:
+    needs: binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Collect archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: cd dist && sha256sum statuser-* > SHA256SUMS
+
+      - name: Attach to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+
