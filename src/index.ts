@@ -11,6 +11,7 @@ import { registerReportsCommands } from './commands/reports.js';
 import { registerMaintenanceCommands } from './commands/maintenance.js';
 import { registerScenariosCommands } from './commands/scenarios.js';
 import { registerServersCommands } from './commands/servers.js';
+import { completionScript, SHELLS, type Shell } from './completion.js';
 import { CliError, ExitCode, StatuserApiError } from './errors.js';
 import { localizeCommander } from './commander-i18n.js';
 import { t } from './i18n.js';
@@ -37,6 +38,18 @@ registerConfigCommands(program);
 registerIncidentsCommands(program);
 registerReportsCommands(program);
 registerHeartbeatCommands(program);
+
+// Last: the script is built from every command registered above.
+program
+  .command('completion')
+  .description(t.cmdCompletion)
+  .argument('<shell>', t.argShell)
+  .action((shell: string) => {
+    if (!SHELLS.includes(shell as Shell)) {
+      throw new CliError(t.argShell, ExitCode.Usage);
+    }
+    process.stdout.write(completionScript(program, shell as Shell));
+  });
 
 // No top-level await: the standalone binary runs this as CommonJS.
 program.parseAsync(process.argv).catch((error: unknown) => {

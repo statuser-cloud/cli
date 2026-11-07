@@ -515,6 +515,8 @@ const ru = {
   confirmDeleteMaintenance: (id: number, title: string) =>
     `Удалить плановые работы «${title}» (#${id}) со страницы? [y/N] `,
   colEnd: 'Конец',
+  cmdCompletion: 'напечатать скрипт автодополнения для bash, zsh или fish',
+  argShell: 'оболочка: bash, zsh или fish',
 };
 
 export type Messages = typeof ru;
@@ -990,6 +992,8 @@ const en: Messages = {
   confirmDeleteMaintenance: (id, title) =>
     `Remove planned maintenance "${title}" (#${id}) from the page? [y/N] `,
   colEnd: 'End',
+  cmdCompletion: 'print the completion script for bash, zsh or fish',
+  argShell: 'shell: bash, zsh or fish',
 };
 
 const dictionaries: Record<Lang, Messages> = { ru, en };
